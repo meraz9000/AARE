@@ -60,9 +60,16 @@ fun ProjectedAppScreen(runtime: CarRuntime, app: CarAppEntry, modifier: Modifier
                 override fun onError(message: String) {
                     error = message
                     status = null
+                    // Drop back behind the window so the error and Retry button are visible.
+                    lastSurfaceView?.setZOrderOnTop(false)
                 }
 
                 override fun onChildAttached() {
+                    // A SurfaceView sits behind its window by default, and so does the Maps
+                    // window embedded in it. Input is hit-tested top-down, so AARE's own
+                    // full-screen car window took every touch before Maps could. Raising the
+                    // SurfaceView above the window puts Maps' embedded window on top for input.
+                    lastSurfaceView?.setZOrderOnTop(true)
                     nativeInput = true
                 }
             },
@@ -121,6 +128,7 @@ fun ProjectedAppScreen(runtime: CarRuntime, app: CarAppEntry, modifier: Modifier
 
                         override fun surfaceDestroyed(holder: SurfaceHolder) {
                             lastSurface = null
+                            surfaceView.setZOrderOnTop(false)
                             host.stop()
                         }
                     })
@@ -151,6 +159,7 @@ fun ProjectedAppScreen(runtime: CarRuntime, app: CarAppEntry, modifier: Modifier
                         error = null
                         status = "Retrying ${info.label}…"
                         nativeInput = false
+                        lastSurfaceView?.setZOrderOnTop(false)
                         val view = lastSurfaceView
                         if (view != null && runtime.nativeTouchInput) {
                             host.start(view, lastWidth, lastHeight, dpi)
