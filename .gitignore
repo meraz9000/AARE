@@ -48,5 +48,9 @@ google-services.json
 *.apkm
 *.xapk
 
+# Frida harness build outputs
+node_modules/
+maps_capture_agent_compiled.js
+
 # Claude Code agent worktrees
 .claude/

@@ -1,8 +1,10 @@
 # Gearhead's projected-activity protocol (Maps, Waze, and the signature wall)
 
-Status: **protocol mapped and demonstrated with a mock; Google Maps blocked on retail devices by a
-signature permission checked inside the app.** Written against gearhead 17.9.664044 and Maps
-26.42/26.43 on a Samsung SM-S948U1 (Android 17, unrooted).
+Status: **protocol mapped and demonstrated end to end: real Google Maps navigation pixels were
+captured on rooted hardware with a UID-scoped Maps-process hook.** Written against gearhead
+17.9.664044 and Maps 26.42/26.43. The initial mapping and the retail-device rejection were
+observed on a Samsung SM-S948U1 (Android 17, unrooted); the successful pixel capture ran on a
+rooted Pixel 10 Pro XL (Android 17) with Frida 17.24.3.
 
 This document is the follow-up to [gearhead-notes.md](gearhead-notes.md). That file covers the
 Android Auto transport (AAP), TLS, service discovery and the Car App Library host. This one covers
@@ -12,12 +14,16 @@ section.
 
 > Short version: the protocol is no longer the unknown. `ICarProjection` is a small Binder AIDL
 > with 28 transactions; the host passes a `Surface` inside `DrawingSpec`; the app creates a
-> `Presentation` on that surface. A mock service implementing the same Binder runs end to end. A
-> real Maps install accepts the bind and then rejects the first transaction with
+> `Presentation` on that surface. A mock service implementing the same Binder runs end to end.
+> A real Maps install accepts the bind and then rejects the first transaction with
 > `SecurityException: projection client manager does not have permission:
 > android.permission.CAPTURE_VIDEO_OUTPUT`. That permission is `signature`, so an ordinary app
-> cannot hold it. Root or a Maps-side hook is required. Root alone, in a shell process, does not
-> help because Android's ActivityManager will not bind a service for a process it does not know.
+> cannot hold it. On a rooted Pixel, a Frida hook that returned `PERMISSION_GRANTED` for the
+> probe's UID (and only that UID) got past the check; Maps then accepted `onProjectionStart`,
+> resumed, and rendered its real navigation UI into the host surface. The protocol barrier is
+> gone; the remaining barrier is the signature permission. Root alone, in a shell process, does
+> not help because Android's ActivityManager will not bind a service for a process it does not
+> know.
 
 ## 1. What the apps actually implement
 
@@ -234,6 +240,53 @@ probe activity. The host's `ImageReader` receives RGBA frames at 1280x720:
 This validates the `onSetup` → `onProjectionStart` → `DrawingSpec` → `Presentation` chain end to
 end, independent of Maps.
 
+### 4.3 Real Maps pixels on rooted hardware
+
+The final experiment used the same unmodified probe and an unmodified Maps APK on a rooted Pixel
+10 Pro XL (Android 17, Magisk 31.1). A Frida 17.24.3 script was loaded into the Maps process and
+hooked `ContextImpl.checkCallingPermission` / `ContextWrapper.checkCallingPermission`:
+
+```js
+if (permission === 'android.permission.CAPTURE_VIDEO_OUTPUT' &&
+    Binder.getCallingUid() === TARGET_UID) return 0;
+```
+
+`TARGET_UID` was the probe app's UID (`10358`), not every caller. The hook was attached to a
+freshly spawned Maps process before the probe started. The probe then sent `onSetup`,
+`onProjectionStart` (1280×720 at 390 dpi) and, 300 ms later, `onProjectionResume`. Maps accepted
+all three and created its own projected window `VRI[trf]` on a VirtualDisplay named
+`com.google.android.apps.maps/trf`, with the host's `ImageReader` surface attached. The host
+received RGBA frames at 1280×720, stride 5120, roughly every 100 ms.
+
+```
+I ProjectionProbe: uid=10358 pid=22365
+I ProjectedHost: bound com.google.android.apps.maps/...GmmCarProjectionService
+I ProjectedHost: onSetup accepted, handled=true
+I ProjectedHost: onProjectionStart (tx 26) 1280x720@390 accepted, handled=true
+I ProjectedHost: onProjectionResume (tx 4) accepted, handled=true
+I ProjectedHost: frame 1: 1280x720 stride=5120 format=1
+```
+
+The first frame is often the pre-UI background (uniform dark blue). A later frame is the proof:
+
+![Google Maps navigation rendered through the reconstructed ICarProjection host](../screenshots/gearhead-projection-maps.png)
+
+Frame 120 shows the real Maps 3D navigation view — `Moore Ave`, `Kelly Ct`, `Matthew Ln`,
+`Hilton Ave`, `Loreli Ln`, buildings, road geometry and the car/chevron marker — with 20,422
+distinct colors. There is no MediaProjection or screen capture anywhere in the path: these are
+the pixels Maps' own `Presentation` drew onto the surface supplied in `DrawingSpec.d`.
+
+Getting from "accepted" to this frame required four fixes beyond the mock:
+
+1. The `DrawingSpec` parcel needs an explicit presence `int 1` before the SafeParcelable body.
+2. `ICar` must return a non-null `CarInfo` (tx 1) and `CarUiInfo` (tx 2), and the
+   `ICarDisplay` must return `CarUiInfo` for transaction 3; otherwise Maps' UI setup
+   dereferences null.
+3. `ICar` transaction 77 must return an `ICarDisplayManager`; its transaction 3 must return an
+   `ICarDisplay`.
+4. `onProjectionStart` alone creates the CarActivity but leaves it stopped. Gearhead follows it
+   with `onProjectionResume`; without that Maps never draws.
+
 ## 5. Why Shizuku and shell processes do not solve it
 
 The obvious idea is to run the host as shell, because shell holds `CAPTURE_VIDEO_OUTPUT`. A
@@ -276,9 +329,10 @@ app and preserve the protocol implementation in this repository.
    the package is reinstalled unless the root module reapplies it, and needs verification on the
    target build. Do not assume every PackageManager will honor a hand-edited signature grant.
 2. **Root + LSPosed/Frida hook in the Maps process** that makes `bemm.h()` return immediately (or
-   makes `checkCallingPermission` return 0 for AARE's UID). AARE remains unmodified. This is the
-   most reliable way to test the full pixel path without patching the APK, but it is version
-   specific and clearly outside normal app behavior.
+   makes `checkCallingPermission` return 0 for AARE's UID). AARE remains unmodified. **This is
+   the path that produced the frame above**, with a UID-scoped Frida hook. It is the most reliable
+   way to test the full pixel path without patching the APK, but it is version specific and
+   clearly outside normal app behavior.
 3. **Patched Maps APK** with the `h()` check removed and re-signed, installed as a system app
    replacement. It works, but it modifies Google Maps, breaks Play Store updates/signature checks,
    and has obvious legal/ToS exposure. Not recommended.
@@ -336,18 +390,30 @@ adb shell am start -n net.prototux.probe/.ProbeActivity --ez mock true  # mock: 
 adb logcat -s ProjectionProbe ProjectedHost MockProjection
 ```
 
+On rooted hardware, the UID-scoped hook path is in
+`tools/gearhead-projection-probe/frida/`:
+
+```sh
+cd tools/gearhead-projection-probe/frida
+# set TARGET_UID to the probe's UID in maps_capture_agent.js
+# bundle the Frida 17 Java bridge, then:
+python3 run_maps_capture.py
+adb pull /sdcard/Android/data/net.prototux.probe/files/projected-frame-120.png
+```
+
 The probe was built against Android SDK 37, build-tools 36.0.0, and the debug keystore. It requests
 `CAPTURE_VIDEO_OUTPUT` only to print whether the permission is granted; without a root grant it is
 denied at install and the request is harmless.
 
 ## 9. Bottom line
 
-The private host API is real, small, and now documented. The protocol barrier is gone: a host can
-bind the exported service, perform `onSetup`, pass a `Surface` in `DrawingSpec`, and receive Maps'
-`Presentation` frames. The remaining barrier is a signature permission enforced inside Maps, not
-the absence of a public API. On a retail unrooted phone, Maps cannot be hosted by AARE. With a
-root-side grant or a Maps-process hook, the same code path should render Maps pixels; that is the
-experiment still to run on rooted hardware.
+The private host API is real, small, and now documented and demonstrated. A host can bind the
+exported service, perform `onSetup`, pass a `Surface` in `DrawingSpec`, resume the projection, and
+receive Maps' real navigation frames. The remaining barrier is a signature permission enforced
+inside Maps, not the absence of a public API. On a retail unrooted phone, Maps cannot be hosted by
+AARE. A root-side grant or a Maps-process hook is required; the UID-scoped hook path is the one
+proven here. Root alone, from a shell or Shizuku user service, is not enough because AMS will not
+bind the service for a process it does not know.
 
 For Waze, the public Car App Library path is available today and should be tested before spending
 more time on private projection.
