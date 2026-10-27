@@ -40,6 +40,11 @@ sealed interface CarScreen {
     data object Dashboard : CarScreen
     data object Launcher : CarScreen
     data class App(val appId: String) : CarScreen
+
+    /** Two apps side by side, as in Android Auto's split screen. */
+    data class Split(val leftId: String, val rightId: String) : CarScreen {
+        fun contains(appId: String): Boolean = appId == leftId || appId == rightId
+    }
 }
 
 /** A transient card, e.g. an incoming message or a toast from a car app. */
@@ -128,6 +133,9 @@ data class CarCall(val ringing: Boolean, val name: String, val sinceMs: Long)
 /** Actions the car UI asks for; implemented by the session. */
 interface CarActions {
     fun openApp(app: CarAppEntry)
+
+    /** Opens [app] beside the app that is already on screen (or the most recent one). */
+    fun openInSplit(app: CarAppEntry)
     fun goHome()
     fun openLauncher()
     fun assistant()

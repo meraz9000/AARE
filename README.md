@@ -129,6 +129,12 @@ calendar event, over a wallpaper if you pick one. On very wide screens (1920x720
 three cards side by side. The weather comes from [Open-Meteo](https://open-meteo.com/) (no account,
 no Google), asked for an approximate position (about 10 km); you can turn it off.
 
+**Split screen.** Long-press an app in the car app grid to open it beside the app that is already
+on screen, like Android Auto's split screen. For example, open Google Maps, go back to the grid,
+and long-press Nuvio Cast to get the map on the left and the cast app on the right. *Back* closes
+the split and returns to the left app. Only one legacy projected app (Maps) can be shown at a
+time. [Screenshot: Maps and Nuvio Cast side by side](docs/screenshots/aare-split-maps-nuvio.png).
+
 **Instrument cluster.** On cars whose head unit offers a cluster display, AARE sends it its own
 video, like Android Auto: the navigation app's cluster map when the app supports it
 (`androidx.car.app.category.FEATURE_CLUSTER`), otherwise a turn card with the next maneuver, its

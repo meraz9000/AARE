@@ -5,9 +5,11 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -140,6 +142,17 @@ private fun ContentArea(
                 val app = state.app(screen.appId)
                 if (app != null) appContent(app, Modifier.fillMaxSize()) else Dashboard(state, actions, navMap, Modifier.fillMaxSize().padding(gutter))
             }
+            is CarScreen.Split -> Row(Modifier.fillMaxSize()) {
+                val left = state.app(screen.leftId)
+                val right = state.app(screen.rightId)
+                if (left != null) {
+                    appContent(left, Modifier.weight(1f).fillMaxHeight())
+                }
+                Box(Modifier.width(1.dp).fillMaxHeight().background(MaterialTheme.colorScheme.outlineVariant))
+                if (right != null) {
+                    appContent(right, Modifier.weight(1f).fillMaxHeight())
+                }
+            }
         }
     }
 }
@@ -168,7 +181,11 @@ private fun RailContent(state: CarUiState, actions: CarActions, horizontal: Bool
     val media = state.app(state.activeMediaAppId)
     val phone = state.apps.firstOrNull { it.kind == CarAppKind.PHONE }
     val settings = state.apps.firstOrNull { it.kind == CarAppKind.SETTINGS }
-    fun on(app: CarAppEntry?) = app != null && state.screen == CarScreen.App(app.id)
+    fun on(app: CarAppEntry?) = app != null && when (val screen = state.screen) {
+        is CarScreen.App -> screen.appId == app.id
+        is CarScreen.Split -> screen.contains(app.id)
+        else -> false
+    }
     // Like Android Auto's taskbar: the apps used last, besides the fixed ones (one on a side rail, for height).
     val fixed = setOfNotNull(nav?.id, media?.id, phone?.id, settings?.id)
     val recent = state.recentAppIds.filter { it !in fixed }.mapNotNull(state::app)
@@ -529,6 +546,7 @@ fun RoundIcon(icon: ImageVector, label: String, filled: Boolean, onClick: () -> 
 
 // ---------------------------------------------------------------- launcher
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun Launcher(state: CarUiState, actions: CarActions, modifier: Modifier) {
     LazyVerticalGrid(
@@ -541,7 +559,12 @@ private fun Launcher(state: CarUiState, actions: CarActions, modifier: Modifier)
         // Already in the user's order (CarRuntime.applyApps).
         items(state.apps, key = { it.id }) { app ->
             Column(
-                Modifier.clip(RoundedCornerShape(24.dp)).clickable { actions.openApp(app) }
+                Modifier.clip(RoundedCornerShape(24.dp))
+                    .combinedClickable(
+                        onClick = { actions.openApp(app) },
+                        onLongClickLabel = "Split screen",
+                        onLongClick = { actions.openInSplit(app) },
+                    )
                     .semantics { contentDescription = app.label }.padding(12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {

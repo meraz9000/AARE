@@ -63,6 +63,10 @@ object CarTools {
                 CarScreen.Dashboard -> "home"
                 CarScreen.Launcher -> "app list"
                 is CarScreen.App -> ui.app(s.appId)?.label ?: "an app"
+                is CarScreen.Split -> listOfNotNull(
+                    ui.app(s.leftId)?.label,
+                    ui.app(s.rightId)?.label,
+                ).joinToString(" + ").ifBlank { "split screen" }
             })
         ui.phoneGuidance?.let { g ->
             o.put("navigation", JSONObject().put("app", g.appLabel).put("next", listOf(g.primary, g.secondary).filter { it.isNotBlank() }.joinToString(", "))

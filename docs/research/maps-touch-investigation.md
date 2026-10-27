@@ -1,5 +1,10 @@
 # Projected Maps touch: investigation notes (2026-10-27)
 
+> **Update:** the blocker described here was later found in `DrawingSpec.e`. It is a
+> system-window insets rect, not the content bounds. Sending `Rect(0,0,0,0)` instead of
+> `Rect(0,0,width,height)` fixed Maps tap, panning and two-finger pinch in a real Kia EV6
+> (`88afadb`). The notes below are kept as the diagnostic history.
+
 Branch `experiment/scvh-touch`, Pixel 10 Pro XL `IWW6LVJPKJQ59I` (Android 17 / SDK 37, user build,
 Magisk + Vector), AARE's own desktop head unit (`./headunit.sh`) at 1280×720.
 

@@ -29,20 +29,20 @@ are in [`gearhead-notes.md`](gearhead-notes.md).
 
 ## What is not proven / known open issues
 
-- **Maps drag-to-pan does not work.** Touches reach Maps' map view with correct coordinates and
-  its gesture detector reports the scroll, but Maps never queues a camera move, and it makes no
-  ICar calls during the drag. The earlier "DHU drag moved the camera" claim was not supported by
-  its screenshot. Full findings: [`maps-touch-investigation.md`](maps-touch-investigation.md).
 - **Retry after Maps dies does nothing** (`ProjectedHost.startInternal()` early return; the old
   connection is not cleared). Leave the Maps screen and reopen it instead.
-
-- **Pinch-to-zoom** is verified in a real Kia EV6: two-finger zoom in and out works on the car's
-  touch screen, as do tap and panning. The desktop head unit remains single-pointer, so the car
-  is the reference test.
 - **Cut-off / overscan on the car screen** was not specifically assessed in the Kia test.
   `CarSession` honors explicit per-side `ui_config.margins` and converts pixels to dp correctly.
   A user-configurable **Connection > Video > Screen edge margin** now adds a uniform black border
   when the car crops despite zero margins; it still needs a real-car verification.
+- **Split screen** has been verified in the phone preview only so far; real-car split touch and
+  Nuvio active-video sizing remain to be tested.
+
+Maps touch, panning and two-finger pinch-to-zoom are verified in a real Kia EV6. The final touch
+blocker was `DrawingSpec.e`: it is a **system-window insets** rect, not the content bounds. Sending
+`Rect(0,0,0,0)` instead of `Rect(0,0,width,height)` let Maps' native Impress map receive gestures
+(`88afadb`). The desktop head unit remains single-pointer, so the car is the reference multi-touch
+test.
 - **Real Kia EV6 test** is complete: Maps projection, tap, panning, two-finger pinch-to-zoom,
   audio and car GPS work. The car uses AARE's imported phone certificate (the local `gearhead2`
   import) and the VirtualDevice setup below.
@@ -53,6 +53,11 @@ are in [`gearhead-notes.md`](gearhead-notes.md).
   `dev.lab.ytcar` through `su` (or `killBackgroundProcesses` if root is unavailable), then
   reconnects its `CarAppService`. On a rooted install, grant AARE root once so this clears a
   frozen process; without root it still reconnects but may not kill the old process.
+- **Split screen** is implemented: long-press a tile in the car app grid to put it beside the
+  current app. It renders two panes in `CarShell`/`CarPlayShell`, keeps both `CarAppConnection`s
+  visible, and supports one projected app per split. Verified in the phone preview with Maps +
+  Nuvio Cast (`docs/screenshots/aare-split-maps-nuvio.png`); real-car split/touch is still to be
+  tested. *Back* returns to the left app.
 - **Waze** reaches its one-time setup screen with the HostValidator hook; full navigation needs
   Waze signed in on the phone. This is separate from the Maps private API.
 - The current code has test-only infrastructure: a trusted VirtualDevice display, a Companion

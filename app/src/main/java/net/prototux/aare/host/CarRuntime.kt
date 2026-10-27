@@ -149,7 +149,12 @@ class CarRuntime(
             val id = idOf(from)
             // Car apps stay connected in the background, and AARE hosts any car app (not only Play-approved
             // ones): only the app on screen, or in the assistant bar, calls straight away; any other is asked.
-            val onScreen = id != null && ((ui.screen as? CarScreen.App)?.appId == id || ui.assistantAppId == id)
+            val screen = ui.screen
+            val onScreen = id != null && (
+                (screen is CarScreen.App && screen.appId == id) ||
+                    (screen is CarScreen.Split && screen.contains(id)) ||
+                    ui.assistantAppId == id
+                )
             when {
                 code -> {
                     notice("Not calling", "${from.info.label} asked to dial a code with * or #, not a phone number")
@@ -186,7 +191,13 @@ class CarRuntime(
 
     override fun finish(app: CarAppConnection) {
         val id = idOf(app) ?: return
-        if ((ui.screen as? CarScreen.App)?.appId == id) ui.screen = CarScreen.Dashboard
+        when (val screen = ui.screen) {
+            is CarScreen.App -> if (screen.appId == id) ui.screen = CarScreen.Dashboard
+            is CarScreen.Split -> if (screen.contains(id)) {
+                ui.screen = CarScreen.App(if (screen.leftId == id) screen.rightId else screen.leftId)
+            }
+            else -> Unit
+        }
         if (ui.assistantAppId == id) ui.assistantAppId = null
         // The dashboard's map card would start it again at once. Don't start another one in its
         // place either: two apps that both finish on start would take turns forever.
@@ -530,7 +541,15 @@ class CarRuntime(
 
     /** True when a projected app is on screen and should receive this hardware key. */
     fun projectedKey(code: Int, down: Boolean): Boolean {
-        val id = (ui.screen as? CarScreen.App)?.appId ?: return false
+        val id = when (val screen = ui.screen) {
+            is CarScreen.App -> screen.appId
+            is CarScreen.Split -> when {
+                ui.app(screen.leftId)?.kind == CarAppKind.PROJECTED -> screen.leftId
+                ui.app(screen.rightId)?.kind == CarAppKind.PROJECTED -> screen.rightId
+                else -> null
+            }
+            else -> null
+        } ?: return false
         if (ui.app(id)?.kind != CarAppKind.PROJECTED) return false
         val host = activeProjectedHost ?: return false
         host.sendKey(code, down)
@@ -600,25 +619,64 @@ class CarRuntime(
 
     // ------------------------------------------------------------------ actions from the car UI
 
+    /** Makes an app the active navigation/media app and starts its car service. */
+    private fun activate(app: CarAppEntry) {
+        when (app.kind) {
+            CarAppKind.MEDIA -> {
+                ui.activeMediaAppId = app.id
+                settings.lastMediaApp = app.packageName
+                media.apps.value.firstOrNull { it.packageName == app.packageName }?.let { media.select(it) }
+            }
+            CarAppKind.NAVIGATION -> {
+                ui.activeNavAppId = app.id
+                settings.lastNavApp = app.packageName
+                connection(app.id)?.connect()
+            }
+            CarAppKind.PROJECTED -> Unit // ProjectedAppScreen binds when its SurfaceView is ready.
+            else -> connection(app.id)?.connect()
+        }
+    }
+
+    private fun rememberRecent(appId: String) {
+        ui.recentAppIds.remove(appId)
+        ui.recentAppIds.add(0, appId)
+        while (ui.recentAppIds.size > 6) ui.recentAppIds.removeAt(ui.recentAppIds.lastIndex)
+    }
+
     val actions = object : CarActions {
         override fun openApp(app: CarAppEntry) {
-            when (app.kind) {
-                CarAppKind.MEDIA -> {
-                    ui.activeMediaAppId = app.id
-                    settings.lastMediaApp = app.packageName
-                    media.apps.value.firstOrNull { it.packageName == app.packageName }?.let { media.select(it) }
-                }
-                CarAppKind.NAVIGATION -> {
-                    ui.activeNavAppId = app.id
-                    settings.lastNavApp = app.packageName
-                    connection(app.id)?.connect()
-                }
-                CarAppKind.PROJECTED -> Unit // ProjectedAppScreen binds when its SurfaceView is ready.
-                else -> connection(app.id)?.connect()
-            }
+            activate(app)
             ui.screen = CarScreen.App(app.id)
+            rememberRecent(app.id)
+        }
+
+        override fun openInSplit(app: CarAppEntry) {
+            // The other pane is whatever is on screen now, or the last app if we are in the
+            // launcher. This makes "open an app, go to the grid, long-press another" work.
+            val other = when (val screen = ui.screen) {
+                is CarScreen.App -> ui.app(screen.appId)
+                is CarScreen.Split -> ui.app(screen.leftId)
+                CarScreen.Dashboard, CarScreen.Launcher ->
+                    ui.recentAppIds.firstNotNullOfOrNull { ui.app(it)?.takeIf { entry -> entry.id != app.id } }
+            }
+            if (other == null || other.id == app.id) {
+                notice("Split screen", "Open another app first, then long-press an app to put it beside")
+                openApp(app)
+                return
+            }
+            if (other.kind == CarAppKind.PROJECTED && app.kind == CarAppKind.PROJECTED) {
+                notice("Split screen", "Only one projected app can be shown at a time")
+                openApp(app)
+                return
+            }
+            activate(other)
+            activate(app)
+            ui.screen = CarScreen.Split(other.id, app.id)
+            // The new app is the most recent; the one that was already open follows it.
+            ui.recentAppIds.remove(other.id)
             ui.recentAppIds.remove(app.id)
             ui.recentAppIds.add(0, app.id)
+            ui.recentAppIds.add(1, other.id)
             while (ui.recentAppIds.size > 6) ui.recentAppIds.removeAt(ui.recentAppIds.lastIndex)
         }
 
@@ -679,6 +737,7 @@ class CarRuntime(
                 val conn = connections[s.appId]
                 if (conn != null) conn.back() else ui.screen = CarScreen.Dashboard
             }
+            is CarScreen.Split -> ui.screen = CarScreen.App(s.leftId)
             CarScreen.Launcher -> ui.screen = CarScreen.Dashboard
             CarScreen.Dashboard -> Unit
         }
