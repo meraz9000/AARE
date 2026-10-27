@@ -154,8 +154,9 @@ AAP path, not just Compose); touch is wired and verified in the desktop head uni
 real-car path still needs testing. AARE reports a touchscreen in `CarUiInfo` (without that
 Maps disables map gestures), routes Maps' system/tap sounds through the car's system-audio
 channel, and feeds the car's GPS into Android's mock location while "Use car GPS" is enabled.
-For car GPS, allow AARE as a mock-location app (on a rooted test phone:
-`adb shell su -c 'appops set net.prototux.aare android:mock_location allow'`). Waze declares
+For car GPS, allow AARE as a mock-location app: either select it under Developer options →
+Select mock location app, or on a rooted test phone run
+`adb shell su -c 'appops set net.prototux.aare android:mock_location allow'`. Waze declares
 the public Car App Library, not `ICarProjection`; its
 `HostValidator` rejects AARE's signing certificate. The same on-device hooks module (or the
 test-only Frida hook) makes Waze accept AARE and reaches Waze's own one-time setup screen, but
