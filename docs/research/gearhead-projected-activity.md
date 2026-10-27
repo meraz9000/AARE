@@ -380,7 +380,8 @@ cannot hold `CAPTURE_VIDEO_OUTPUT` on a stock install. The on-device
 [AARE Projection Hooks](../../tools/aare-hooks/README.md) Vector/LSPosed module now grants the
 check only to AARE's UID; the Frida harness in `tools/gearhead-projection-probe/frida/` remains
 the development alternative. A phone with the module installed renders Maps with no laptop
-attached (screenshot in `docs/screenshots/aare-lsposed-maps.png`). Remaining work is reconnect/
+attached (screenshots in `docs/screenshots/aare-lsposed-maps.png` and
+`docs/screenshots/aare-headunit-lsposed.png`). Remaining work is reconnect/
 retry polish and a real car/input test.
 
 ## 7. Waze is not this protocol

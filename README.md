@@ -164,6 +164,8 @@ separate from the Maps protocol.
 
 ![Google Maps hosted inside AARE by the on-device hooks module, with no Frida running](docs/screenshots/aare-lsposed-maps.png)
 
+![The full desktop-head-unit path with only the on-device hooks module; no Frida client is attached](docs/screenshots/aare-headunit-lsposed.png)
+
 On the phone, the *Apps* page sets which apps show in the car and in which order, and the
 *Messages* page has Android Auto's driving options: Do Not Disturb while connected (calls and
 priority conversations still come through) and an automatic reply, once per conversation per
@@ -453,6 +455,7 @@ in Android Studio works too.
 | `app/.../mirror/` | the *Phone screen* app: mirroring and touch |
 | `app/.../audio/` | car audio: capture methods (audio policy, Shizuku, screen capture), microphone |
 | `tools/magisk/` | Magisk module that installs AARE as a privileged app |
+| `tools/aare-hooks/` | Vector/LSPosed module that lets Maps and Waze accept AARE on-device |
 | `app/.../notify/` | notifications: messaging apps, and directions from navigation apps on the phone |
 | `app/.../transport/` | USB accessory, TCP server, wireless (Bluetooth + Wi-Fi) |
 | `app/.../ui/` | phone UI, car shell (rail, dashboard, launcher), theme |
