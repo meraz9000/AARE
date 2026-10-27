@@ -81,3 +81,30 @@ The AARE side is no longer the obstacle. Getting Maps to pan would mean understa
 internal reason for not applying its own scroll, which this work did not pursue. For a touch-driven
 map in AARE, prefer Car App Library navigation apps (Waze): AARE detects the gestures and calls the
 app's `SurfaceCallback.onScroll/onScale/onFling`, a public interface AARE controls.
+
+## 2026-10-27: display-id mismatch and tx 71 (unverified)
+
+Stock gearhead's `jnt.aR()` builds the `DrawingSpec` with the **display id of the window that
+hosts the projection**, not display 0:
+
+```java
+int i = this.M; // display id delivered with the InputTransferToken
+Bundle bundle = new Bundle();
+bundle.putParcelable("input_transfer_token", parcelable);
+bundle.putInt("com.google.android.gms.car.EXTRA_CAR_ACTIVITY_FLAGS", true != aJ() ? 128 : 0);
+new DrawingSpec(width, height, density, surface, insets, flags, i, bundle);
+```
+
+AARE was sending `CarDisplayId = 0` in `onProjectionStart`, `DrawingSpec.displayId = 0`,
+`onProjectionResume(0)`, and display 0 for touch/key. On the SCVH path Maps' `bemp.u()` uses
+`drawingSpec.g` to pick the display and creates its window context on it. With 0, Maps creates its
+SCVH window against the **phone display**; the map's internal SurfaceView measured 2170x1080 while
+the car content was 1184x720. That is a credible reason for the map camera/UI to behave differently
+even though touches arrive at the right view.
+
+`0de77e4` changes `ProjectedHost` to use `view.display.displayId` (the AARE VirtualDevice display)
+for all of those values. It also answers tx 71 with `1` for `client_fullscreen_presentation` and
+`presentation_clear_parent_padding` instead of 0. Build passed; **not yet tested on the phone** —
+the device disconnected before the install. Next step: reconnect the Pixel, install, restart
+AARE + DHU + Maps, confirm `ProjectedHost: start view ... display=<car id>` and
+`onProjectionStart ... display=<car id>`, then check whether Maps now shows full AA chrome and pans.
