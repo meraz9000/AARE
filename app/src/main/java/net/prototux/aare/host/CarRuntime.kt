@@ -80,7 +80,11 @@ class CarRuntime(
     /** Hosted car app connections by entry id. */
     private val connections = mutableStateMapOf<String, CarAppConnection>()
     private val carApps = HashMap<String, CarAppInfo>()
+    private val projectedApps = HashMap<String, ProjectedAppInfo>()
     private val visibleCount = HashMap<CarAppConnection, Int>()
+
+    /** The private projected-activity host on screen, if any (Maps and other legacy GMS apps). */
+    internal var activeProjectedHost: ProjectedHost? = null
 
     /** Hooks the projection session sets: navigation status to the cluster, microphone, etc. */
     var onTrip: ((CarAppConnection, Trip?) -> Unit)? = null
@@ -332,6 +336,8 @@ class CarRuntime(
 
     fun stop() {
         running.remove(this)
+        activeProjectedHost?.stop()
+        activeProjectedHost = null
         runCatching { context.unregisterReceiver(packageReceiver) }
         settings.unregisterListener(settingsListener)
         connections.values.forEach { it.release() }
@@ -344,17 +350,22 @@ class CarRuntime(
     /** Rescans car apps (package manager work and icons on a background thread). */
     fun refreshApps() {
         scope.launch {
-            val (found, messaging) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                CarAppCatalog.query(context) to AndroidAutoApps.messagingApps(context)
+            val (found, messaging, projected) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                Triple(
+                    CarAppCatalog.query(context),
+                    AndroidAutoApps.messagingApps(context),
+                    ProjectedAppCatalog.query(context),
+                )
             }
-            applyApps(found, messaging)
+            applyApps(found, messaging, projected)
         }
     }
 
-    private fun applyApps(found: List<CarAppInfo>, messaging: List<PhoneApp>) {
+    private fun applyApps(found: List<CarAppInfo>, messaging: List<PhoneApp>, projected: List<ProjectedAppInfo> = emptyList()) {
         val hidden = settings.hiddenApps
         val assistantPkg = assistantPackage()
         carApps.clear()
+        projectedApps.clear()
         val entries = ArrayList<CarAppEntry>()
         for (app in found) {
             val id = carId(app)
@@ -366,6 +377,14 @@ class CarRuntime(
                 else -> CarAppKind.TEMPLATED
             }
             entries += CarAppEntry(id, app.packageName, app.label, app.icon, kind)
+        }
+        for (app in projected) {
+            val id = projectedId(app.packageName)
+            projectedApps[id] = app
+            if (app.packageName in hidden) continue
+            // Waze and other Car App Library apps are already in [found]; don't list them twice.
+            if (entries.any { it.packageName == app.packageName }) continue
+            entries += CarAppEntry(id, app.packageName, app.label, app.icon, CarAppKind.PROJECTED)
         }
         for (m in media.apps.value) {
             // An app that has a car UI of its own is shown once, as that.
@@ -464,6 +483,18 @@ class CarRuntime(
     /** Packages of the navigation apps hosted on the car screen. */
     fun navigationPackages(): Set<String> = carApps.values.filter { it.isNavigation }.mapTo(HashSet()) { it.packageName }
 
+    /** The private projected-activity app for a launcher entry, if it is one. */
+    fun projectedApp(id: String): ProjectedAppInfo? = projectedApps[id]
+
+    /** True when a projected app is on screen and should receive this hardware key. */
+    fun projectedKey(code: Int, down: Boolean): Boolean {
+        val id = (ui.screen as? CarScreen.App)?.appId ?: return false
+        if (ui.app(id)?.kind != CarAppKind.PROJECTED) return false
+        val host = activeProjectedHost ?: return false
+        host.sendKey(code, down)
+        return true
+    }
+
     /** The connection for a car app entry, created on first use. */
     fun connection(id: String): CarAppConnection? {
         connections[id]?.let { return it }
@@ -540,6 +571,7 @@ class CarRuntime(
                     settings.lastNavApp = app.packageName
                     connection(app.id)?.connect()
                 }
+                CarAppKind.PROJECTED -> Unit // ProjectedAppScreen binds when its SurfaceView is ready.
                 else -> connection(app.id)?.connect()
             }
             ui.screen = CarScreen.App(app.id)
@@ -623,6 +655,7 @@ class CarRuntime(
                     actions = actions,
                     appContent = { app, mod ->
                         when (app.kind) {
+                            CarAppKind.PROJECTED -> ProjectedAppScreen(this, app, mod)
                             CarAppKind.MEDIA -> {
                                 val m = mediaApps.firstOrNull { it.packageName == app.packageName }
                                 if (m != null) media.Screen(m, ui.drivingRestricted, mod)
@@ -655,6 +688,7 @@ class CarRuntime(
         fun carId(app: CarAppInfo) = "car:${app.service.flattenToShortString()}"
         fun mediaId(pkg: String) = "media:$pkg"
         fun messagingId(pkg: String) = "messages:$pkg"
+        fun projectedId(pkg: String) = "projected:$pkg"
         const val PHONE_SCREEN_ID = "phone-screen"
         const val PHONE_ID = "phone"
         const val SETTINGS_ID = "car-settings"

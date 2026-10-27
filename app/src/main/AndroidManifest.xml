@@ -60,6 +60,11 @@
         tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.CAPTURE_AUDIO_OUTPUT"
         tools:ignore="ProtectedPermissions" />
+    <!-- Experimental private projection (Maps and other legacy GMS car apps): the app checks this
+         signature permission inside its CarActivityService. A normal install is refused; root or
+         a development hook can grant it. -->
+    <uses-permission android:name="android.permission.CAPTURE_VIDEO_OUTPUT"
+        tools:ignore="ProtectedPermissions" />
     <!-- Car apps are found by querying their services. -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />

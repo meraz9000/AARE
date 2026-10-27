@@ -11,7 +11,7 @@ import net.prototux.aare.car.Weather
 import net.prototux.aare.notify.PhoneGuidance
 
 /** What kind of app an entry in the launcher is, which decides where its UI goes. */
-enum class CarAppKind { NAVIGATION, MEDIA, TEMPLATED, ASSISTANT, MESSAGING, PHONE_SCREEN, PHONE, SETTINGS, NOTIFICATIONS }
+enum class CarAppKind { NAVIGATION, MEDIA, TEMPLATED, ASSISTANT, MESSAGING, PROJECTED, PHONE_SCREEN, PHONE, SETTINGS, NOTIFICATIONS }
 
 /** One launchable app on the car screen. */
 @Stable

@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -63,6 +65,8 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
@@ -215,12 +219,16 @@ private fun RailContent(state: CarUiState, actions: CarActions, horizontal: Bool
             Spacer(Modifier.height(4.dp))
             WeatherChip(state.weather)
             NotificationBell(state) { bell() }
-            Spacer(Modifier.weight(1f))
-            // A side rail has room for a recent app only on tall screens.
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            // On short displays the fixed buttons plus the app shortcuts are taller than the
+            // rail. Keep the menu/mic pinned and let the app list scroll instead of clipping them.
+            Column(
+                Modifier.weight(1f).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                // A side rail has room for a recent app only on tall screens.
                 apps(if (LocalConfiguration.current.screenHeightDp >= 800) 1 else 0)
             }
-            Spacer(Modifier.weight(1f))
             menu()
             Spacer(Modifier.height(8.dp))
             mic()
@@ -533,7 +541,8 @@ private fun Launcher(state: CarUiState, actions: CarActions, modifier: Modifier)
         // Already in the user's order (CarRuntime.applyApps).
         items(state.apps, key = { it.id }) { app ->
             Column(
-                Modifier.clip(RoundedCornerShape(24.dp)).clickable { actions.openApp(app) }.padding(12.dp),
+                Modifier.clip(RoundedCornerShape(24.dp)).clickable { actions.openApp(app) }
+                    .semantics { contentDescription = app.label }.padding(12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 AppIcon(app, 80)

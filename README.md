@@ -37,6 +37,7 @@ It needs no Google Play Services.
 | Sensors: driving restrictions, night mode, car GPS and compass (passed to nav apps) | done |
 | Every other sensor the car offers (RPM, odometer, fuel and range, temperature, HVAC, doors, lights, tyres, accelerometer, gyroscope…) for car apps (car hardware API) and the assistant | new, tested only with the desktop head unit's fake car |
 | Car App Library host: handshake, templates, map surface, navigation trips, alerts, car hardware, microphone | done |
+| Google Maps' private projected activity (experimental): bind, `DrawingSpec` surface, resume, touch/key forwarding | display proven on rooted hardware; input needs car testing |
 | Template rendering (list, grid, pane, message, search, sign-in, tabs, navigation, map...) | done |
 | Media apps: browse, search, now playing, transport, active session tracking | done |
 | Messaging apps: conversations from notifications, read aloud, mark as read, reply when parked | new |
@@ -138,6 +139,18 @@ Built-in car apps:
 - **Notifications:** the latest messages, with *Read aloud* and *Mark read*.
 - **Settings:** colors, bar position, a dark bar even by day, style, passenger mode, message
   notifications, phone audio.
+
+**Google Maps (experimental, rooted only).** AARE can host Google Maps' private projected
+activity, not just its notifications: Maps' real map and navigation UI appear in the app grid
+and on the car screen. This uses the legacy `com.google.android.gms.car.ICarProjection` service,
+which Maps protects with the signature permission `CAPTURE_VIDEO_OUTPUT`; a normal install is
+refused. On a rooted test phone, a UID-scoped Maps-process hook is the working path (see
+[docs/research/gearhead-projected-activity.md](docs/research/gearhead-projected-activity.md)).
+The map display is proven; touch and key forwarding are wired, but map gestures still need
+testing in a car. Waze declares the public Car App Library but currently rejects AARE's host
+identity, so it is not part of this path.
+
+![Google Maps' navigation UI inside AARE's car screen, with the AARE rail on the left](docs/screenshots/aare-google-maps.png)
 
 On the phone, the *Apps* page sets which apps show in the car and in which order, and the
 *Messages* page has Android Auto's driving options: Do Not Disturb while connected (calls and

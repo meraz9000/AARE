@@ -352,13 +352,30 @@ AARE already has the display plumbing:
 - `PhoneMirror.kt` uses `MediaProjection` for the phone-screen mode.
 - `ShellAudioService` shows the existing Shizuku user-service pattern.
 
-For Maps, the shape is different: AARE should create an `ImageReader` (or `SurfaceTexture`) at the
-car display size, put that `Surface` in `DrawingSpec.d`, and composite the frames into the same
-encoder input surface that `ProjectionDisplay` uses. Maps' `Presentation` draws at the requested
-size, so no virtual display of AARE's own is needed on the app side. Input is sent back through
-transactions 7/8; lifecycle through 4/5/9. The probe's `ProjectedHost` is the reference
-implementation. A production version needs a `CarUiInfo`/feature baseline, a proper `ICar` stub,
-display/region IDs from AARE's layout, and a reconnect/teardown path.
+For Maps, the implemented shape is:
+
+- `app/.../host/ProjectedAppCatalog.kt` adds Maps' exported `GmmCarProjectionService` to the app
+  list as a `PROJECTED` entry, next to the AndroidX Car App Library apps.
+- `app/.../host/ProjectedHost.kt` binds the service and performs the probe's sequence:
+  `onSetup` (tx 1), `onProjectionStart` (tx 26) with a `DrawingSpec` whose `Surface` is the
+  `SurfaceView` on AARE's car screen, `onProjectionResume` (tx 4), then an
+  `InputFocusChangedEvent` (tx 20). It supplies the minimum `CarInfo`, `CarUiInfo`,
+  `ICarDisplayManager` and `ICarDisplay` objects Maps needs before it draws, and forwards touch
+  (tx 7) and keys (tx 8).
+- `app/.../host/ProjectedAppScreen.kt` hosts that `SurfaceView` in AARE's Compose UI, with a
+  transparent `pointerInput` overlay. The SurfaceView is inside AARE's `ProjectionDisplay`
+  `VirtualDisplay`, so SurfaceFlinger composites Maps' `Presentation` with the rest of the car UI;
+  no separate `ImageReader` or encoder path is needed.
+- `CarPreviewActivity --es launchPackage com.google.android.apps.maps` is a deterministic
+  development launcher; the normal path is the Maps tile in the app grid.
+
+On the rooted Pixel this rendered the real 3D navigation map in the car preview (screenshot in
+`docs/screenshots/aare-google-maps.png`) and the host logged the full setup/resume sequence.
+Touch events reach `ProjectedHost` with the correct local coordinates; whether Maps pans while
+it is following a route is still being checked. The permission gate is unchanged: AARE itself
+cannot hold `CAPTURE_VIDEO_OUTPUT`, so the working test path is the UID-scoped Maps-process hook
+in `tools/gearhead-projection-probe/frida/`. A production build still needs a root/LSPosed
+permission strategy and reconnect/retry polish.
 
 ## 7. Waze is not this protocol
 
@@ -372,9 +389,16 @@ com.waze.car_lib.WazeCarAppService
   category androidx.car.app.category.FEATURE_CLUSTER
 ```
 
-Its `res/xml/automotive_app_desc.xml` contains `<uses name="template"/>`. Waze should be testable
-through AARE's existing Car App Library host, with no private API and no root. That is a separate,
-much cheaper experiment; it does not help Maps, which declares
+Its `res/xml/automotive_app_desc.xml` contains `<uses name="template"/>`. It is therefore a
+public Car App Library app, not a private-projection app. On the test phone AARE 10360 did bind
+the service and negotiated Car App API 8, but Waze rejected the handshake with:
+
+```
+java.lang.SecurityException: Unrecognized host with uid 10360
+```
+
+So Waze's remaining barrier is host identity/allowlisting, not the `ICarProjection` protocol.
+That is a separate experiment; it does not help Maps, which declares
 `<uses name="projection"/>` and has no `CarAppService`.
 
 ## 8. Reproduction
@@ -395,10 +419,19 @@ On rooted hardware, the UID-scoped hook path is in
 
 ```sh
 cd tools/gearhead-projection-probe/frida
-# set TARGET_UID to the probe's UID in maps_capture_agent.js
 # bundle the Frida 17 Java bridge, then:
 python3 run_maps_capture.py
 adb pull /sdcard/Android/data/net.prototux.probe/files/projected-frame-120.png
+```
+
+For the AARE integration instead of the standalone probe:
+
+```sh
+cd tools/gearhead-projection-probe/frida
+python3 run_aare.py
+# Open CarPreviewActivity directly:
+adb shell su -c 'am start -W -n net.prototux.aare/.ui.CarPreviewActivity \
+  --es launchPackage com.google.android.apps.maps'
 ```
 
 The probe was built against Android SDK 37, build-tools 36.0.0, and the debug keystore. It requests

@@ -389,8 +389,12 @@ class CarSession(
                 for (r in report.relativeEvent.dataList) {
                     val code = if (r.delta > 0) KeyEvent.KEYCODE_DPAD_DOWN else KeyEvent.KEYCODE_DPAD_UP
                     repeat(kotlin.math.abs(r.delta)) {
-                        display?.dispatchKey(KeyEvent(KeyEvent.ACTION_DOWN, code))
-                        display?.dispatchKey(KeyEvent(KeyEvent.ACTION_UP, code))
+                        if (!runtime.projectedKey(code, true)) {
+                            display?.dispatchKey(KeyEvent(KeyEvent.ACTION_DOWN, code))
+                        }
+                        if (!runtime.projectedKey(code, false)) {
+                            display?.dispatchKey(KeyEvent(KeyEvent.ACTION_UP, code))
+                        }
                     }
                 }
             }
@@ -409,7 +413,9 @@ class CarSession(
             KeyEvent.KEYCODE_MEDIA_PREVIOUS -> if (!down) media.previous()
             KEYCODE_MEDIA -> if (!down) runtime.ui.app(runtime.ui.activeMediaAppId)?.let(runtime.actions::openApp)
             KEYCODE_NAVIGATION -> if (!down) runtime.ui.app(runtime.ui.activeNavAppId)?.let(runtime.actions::openApp)
-            else -> display?.dispatchKey(KeyEvent(if (down) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP, code))
+            else -> if (!runtime.projectedKey(code, down)) {
+                display?.dispatchKey(KeyEvent(if (down) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP, code))
+            }
         }
     }
 

@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import net.prototux.aare.Settings
 import net.prototux.aare.audio.MicRouter
 import net.prototux.aare.host.CarRuntime
@@ -37,6 +39,23 @@ class CarPreviewActivity : ComponentActivity() {
         runtime.screenHeightDp = (dm.heightPixels / dm.density).toInt()
         runtime.microphone = { sink, stopped -> mic.open(sink, stopped) }
         runtime.start()
+        // Debug/testing hook: launch a car app by package name without tapping the launcher.
+        // Example: adb shell am start -n net.prototux.aare/.ui.CarPreviewActivity \
+        //            --es launchPackage com.google.android.apps.maps
+        val launchPackage = intent.getStringExtra("launchPackage")
+        if (!launchPackage.isNullOrBlank()) {
+            lifecycleScope.launch {
+                repeat(50) { attempt ->
+                    val entry = runtime.ui.apps.firstOrNull { it.packageName == launchPackage }
+                    if (entry != null) {
+                        runtime.actions.openApp(entry)
+                        return@launch
+                    }
+                    if (attempt == 0) runtime.refreshApps()
+                    delay(100)
+                }
+            }
+        }
         setContent { runtime.Root(Modifier.fillMaxSize().systemBarsPadding()) }
         // Through the dispatcher: with predictive back (targetSdk 36+ on Android 16) onBackPressed
         // is no longer called. Back walks the car screen back to the dashboard, then leaves.
