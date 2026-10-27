@@ -76,6 +76,9 @@ import net.prototux.aare.notify.PhoneGuidance
 import net.prototux.aare.ui.theme.CarTheme
 import net.prototux.aare.ui.theme.LocalCarDimens
 
+/** YouTube is a phone media app, not a useful car taskbar shortcut. */
+private const val YOUTUBE_PACKAGE = "com.google.android.youtube"
+
 /**
  * Root of the car screen: a rail on the driver's side and the content area.
  *
@@ -178,7 +181,13 @@ private fun Rail(state: CarUiState, actions: CarActions, horizontal: Boolean) {
 private fun RailContent(state: CarUiState, actions: CarActions, horizontal: Boolean) {
     val d = LocalCarDimens.current
     val nav = state.app(state.activeNavAppId)
-    val media = state.app(state.activeMediaAppId)
+    // YouTube is exposed as a media app, but it is not a useful car taskbar shortcut. Keep it
+    // launchable from the grid, just don't pin it to the rail.
+    val youtube = state.apps.firstOrNull { it.packageName == YOUTUBE_PACKAGE }
+    val media = state.app(state.activeMediaAppId)?.takeUnless { it.packageName == YOUTUBE_PACKAGE }
+    // Maps uses the private projected path, not the navigation Car App Library, but it should
+    // still have a permanent taskbar shortcut next to navigation.
+    val maps = state.apps.firstOrNull { it.kind == CarAppKind.PROJECTED }
     val phone = state.apps.firstOrNull { it.kind == CarAppKind.PHONE }
     val settings = state.apps.firstOrNull { it.kind == CarAppKind.SETTINGS }
     fun on(app: CarAppEntry?) = app != null && when (val screen = state.screen) {
@@ -187,8 +196,10 @@ private fun RailContent(state: CarUiState, actions: CarActions, horizontal: Bool
         else -> false
     }
     // Like Android Auto's taskbar: the apps used last, besides the fixed ones (one on a side rail, for height).
-    val fixed = setOfNotNull(nav?.id, media?.id, phone?.id, settings?.id)
-    val recent = state.recentAppIds.filter { it !in fixed }.mapNotNull(state::app)
+    val fixed = setOfNotNull(nav?.id, maps?.id, media?.id, phone?.id, settings?.id)
+    val recent = state.recentAppIds
+        .filter { it !in fixed && it != youtube?.id }
+        .mapNotNull(state::app)
     // A bottom bar on a portrait screen is short of width (76 dp per button): fewer apps and no
     // weather there, the launcher has them all. Landscape bars keep everything.
     val conf = LocalConfiguration.current
@@ -196,7 +207,8 @@ private fun RailContent(state: CarUiState, actions: CarActions, horizontal: Bool
     val tighterBar = tightBar && conf.screenWidthDp < 640
     val apps: @Composable (Int) -> Unit = { recentSlots ->
         RailApp(nav, Icons.Rounded.Map, on(nav)) { nav?.let(actions::openApp) ?: actions.openLauncher() }
-        RailApp(media, Icons.Rounded.MusicNote, on(media)) { media?.let(actions::openApp) ?: actions.openLauncher() }
+        maps?.let { RailApp(it, Icons.Rounded.Map, on(it)) { actions.openApp(it) } }
+        media?.let { RailApp(it, Icons.Rounded.MusicNote, on(it)) { actions.openApp(it) } }
         recent.take(recentSlots).forEach { app -> RailApp(app, Icons.Rounded.Apps, on(app)) { actions.openApp(app) } }
         phone?.let { RailApp(it, Icons.Rounded.Call, on(it)) { actions.openApp(it) } }
         settings?.takeIf { !tighterBar }?.let { RailApp(it, Icons.Rounded.Settings, on(it)) { actions.openApp(it) } }
