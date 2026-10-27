@@ -19,6 +19,7 @@ import android.util.Log
  * Android only allows it for the app chosen as "mock location app" in Developer options.
  */
 class PhoneLocationFeed(context: Context) {
+    private val appContext = context.applicationContext
     private val lm = context.getSystemService(LocationManager::class.java)
     private val providers = buildList {
         add(LocationManager.GPS_PROVIDER)
@@ -31,7 +32,12 @@ class PhoneLocationFeed(context: Context) {
     /** A new car fix (any thread). */
     @Synchronized
     fun push(car: Location) {
-        if (failed) return
+        // The mock-location app-op can be granted after the car connected. If the first
+        // attempt failed because of it, retry now instead of staying dead until reconnect.
+        if (failed) {
+            if (!allowed(appContext)) return
+            failed = false
+        }
         if (active.isEmpty()) start()
         for (p in active) {
             val l = Location(car).apply {

@@ -159,7 +159,9 @@ Maps disables map gestures), routes Maps' system/tap sounds through the car's sy
 channel, and feeds the car's GPS into Android's mock location while "Use car GPS" is enabled.
 For car GPS, allow AARE as a mock-location app: either select it under Developer options →
 Select mock location app, or on a rooted test phone run
-`adb shell su -c 'appops set net.prototux.aare android:mock_location allow'`. Waze declares
+`adb shell su -c 'appops set net.prototux.aare android:mock_location allow'`. Also make sure
+**Settings → Use car GPS** is on; it is a separate toggle and can be off even after the app-op is
+granted. Waze declares
 the public Car App Library, not `ICarProjection`; its
 `HostValidator` rejects AARE's signing certificate. The same on-device hooks module (or the
 test-only Frida hook) makes Waze accept AARE and reaches Waze's own one-time setup screen, but
