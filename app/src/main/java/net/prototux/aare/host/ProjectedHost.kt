@@ -64,6 +64,7 @@ class ProjectedHost(
 
     private val callback = object : Binder() {
         override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
+            logInbound("callback", code, data, flags)
             when (code) {
                 23 -> {
                     val state = runCatching { data.readInt() }.getOrNull()
@@ -110,6 +111,7 @@ class ProjectedHost(
      */
     private val display = object : Binder() {
         override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
+            logInbound("ICarDisplay", code, data, flags)
             when (code) {
                 3 -> {
                     reply?.writeNoException()
@@ -131,6 +133,7 @@ class ProjectedHost(
 
     private val displayManager = object : Binder() {
         override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
+            logInbound("ICarDisplayManager", code, data, flags)
             if (code == 3) {
                 reply?.writeNoException()
                 reply?.writeStrongBinder(display)
@@ -145,6 +148,7 @@ class ProjectedHost(
     /** The app's ICar callback: just enough of the legacy car description to let it draw. */
     private val car = object : Binder() {
         override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
+            logInbound("ICar", code, data, flags)
             when (code) {
                 1 -> {
                     reply?.writeNoException()
@@ -595,6 +599,29 @@ class ProjectedHost(
         parcel.setDataPosition(end)
     }
 
+    /** Debug: every call Maps makes into AARE, with its interface token and a hex peek of the args. */
+    private fun logInbound(iface: String, code: Int, data: Parcel, flags: Int) {
+        val pos = data.dataPosition()
+        try {
+            data.setDataPosition(0)
+            data.readInt() // strict mode policy
+            data.readInt() // work source uid
+            if (data.dataAvail() >= 4) data.readInt() // header marker (Q+)
+            val token = runCatching { data.readString() }.getOrNull()
+            val argsAt = data.dataPosition()
+            val str = runCatching { data.readString() }.getOrNull()
+            val rest = buildList {
+                while (data.dataAvail() >= 4 && size < 6) add(data.readInt())
+            }
+            data.setDataPosition(argsAt)
+            Log.i(TRACE, "$iface tx $code size=${data.dataSize()} oneway=${flags and IBinder.FLAG_ONEWAY != 0} token=$token str=$str ints=$rest")
+        } catch (t: Throwable) {
+            Log.i(TRACE, "$iface tx $code size=${data.dataSize()} (unparsed: ${t.javaClass.simpleName})")
+        } finally {
+            data.setDataPosition(pos)
+        }
+    }
+
     private fun writeCarUiInfo(parcel: Parcel) {
         val start = parcel.dataPosition()
         parcel.writeInt(20293 or 0xFFFF0000.toInt())
@@ -620,6 +647,7 @@ class ProjectedHost(
 
     companion object {
         private const val TAG = "ProjectedHost"
+        private const val TRACE = "AareICarTrace"
         private const val DESCRIPTOR = "com.google.android.gms.car.ICarProjection"
     }
 }
