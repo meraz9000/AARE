@@ -57,7 +57,8 @@ test.
   current app. It renders two panes in `CarShell`/`CarPlayShell`, keeps both `CarAppConnection`s
   visible, and supports one projected app per split. Verified in the phone preview with Maps +
   Nuvio Cast (`docs/screenshots/aare-split-maps-nuvio.png`); real-car split/touch is still to be
-  tested. *Back* returns to the left app.
+  tested. *Back* returns to the left app. The Maps and Nuvio taskbar shortcuts long-press to
+  open/close split and tap to swap panes; this is verified in the preview.
 - **Waze** reaches its one-time setup screen with the HostValidator hook; full navigation needs
   Waze signed in on the phone. This is separate from the Maps private API.
 - The current code has test-only infrastructure: a trusted VirtualDevice display, a Companion

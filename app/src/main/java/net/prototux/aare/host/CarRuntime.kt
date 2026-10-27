@@ -680,6 +680,29 @@ class CarRuntime(
             while (ui.recentAppIds.size > 6) ui.recentAppIds.removeAt(ui.recentAppIds.lastIndex)
         }
 
+        override fun taskbarClick(app: CarAppEntry) {
+            val split = ui.screen as? CarScreen.Split
+            if (split != null && split.contains(app.id)) {
+                // Tapping either app in a split swaps the two panes.
+                ui.screen = CarScreen.Split(split.rightId, split.leftId)
+            } else {
+                openApp(app)
+            }
+        }
+
+        override fun taskbarLongPress(app: CarAppEntry) {
+            val split = ui.screen as? CarScreen.Split
+            if (split != null && split.contains(app.id)) {
+                // The second long-press leaves split screen and makes the pressed app full size.
+                activate(app)
+                ui.screen = CarScreen.App(app.id)
+                rememberRecent(app.id)
+            } else {
+                // From one app: start a split with it. From the split: replace the other pane.
+                openInSplit(app)
+            }
+        }
+
         override fun goHome() { ui.screen = CarScreen.Dashboard }
         override fun openLauncher() { ui.screen = CarScreen.Launcher }
         override fun assistant() { this@CarRuntime.assistant() }

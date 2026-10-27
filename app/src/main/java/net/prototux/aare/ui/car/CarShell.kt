@@ -79,6 +79,9 @@ import net.prototux.aare.ui.theme.LocalCarDimens
 /** YouTube is a phone media app, not a useful car taskbar shortcut. */
 private const val YOUTUBE_PACKAGE = "com.google.android.youtube"
 
+/** The cast app that AARE can put beside Maps in the taskbar. */
+private const val NUVIO_PACKAGE = "dev.lab.ytcar"
+
 /**
  * Root of the car screen: a rail on the driver's side and the content area.
  *
@@ -188,6 +191,7 @@ private fun RailContent(state: CarUiState, actions: CarActions, horizontal: Bool
     // Maps uses the private projected path, not the navigation Car App Library, but it should
     // still have a permanent taskbar shortcut next to navigation.
     val maps = state.apps.firstOrNull { it.kind == CarAppKind.PROJECTED }
+    val nuvio = state.apps.firstOrNull { it.packageName == NUVIO_PACKAGE }
     val phone = state.apps.firstOrNull { it.kind == CarAppKind.PHONE }
     val settings = state.apps.firstOrNull { it.kind == CarAppKind.SETTINGS }
     fun on(app: CarAppEntry?) = app != null && when (val screen = state.screen) {
@@ -206,16 +210,53 @@ private fun RailContent(state: CarUiState, actions: CarActions, horizontal: Bool
     val tightBar = horizontal && conf.screenHeightDp > conf.screenWidthDp && conf.screenWidthDp < 800
     val tighterBar = tightBar && conf.screenWidthDp < 640
     val apps: @Composable (Int) -> Unit = { recentSlots ->
-        RailApp(nav, Icons.Rounded.Map, on(nav)) { nav?.let(actions::openApp) ?: actions.openLauncher() }
-        maps?.let { RailApp(it, Icons.Rounded.Map, on(it)) { actions.openApp(it) } }
-        media?.let { RailApp(it, Icons.Rounded.MusicNote, on(it)) { actions.openApp(it) } }
-        recent.take(recentSlots).forEach { app -> RailApp(app, Icons.Rounded.Apps, on(app)) { actions.openApp(app) } }
-        phone?.let { RailApp(it, Icons.Rounded.Call, on(it)) { actions.openApp(it) } }
-        settings?.takeIf { !tighterBar }?.let { RailApp(it, Icons.Rounded.Settings, on(it)) { actions.openApp(it) } }
+        val navIsNuvio = nav?.packageName == NUVIO_PACKAGE
+        RailApp(
+            app = nav,
+            fallback = Icons.Rounded.Map,
+            selected = on(nav),
+            onClick = {
+                when {
+                    nav == null -> actions.openLauncher()
+                    navIsNuvio -> actions.taskbarClick(nav)
+                    else -> actions.openApp(nav)
+                }
+            },
+            onLongClick = if (navIsNuvio) ({ actions.taskbarLongPress(nav) }) else null,
+        )
+        maps?.let { app ->
+            RailApp(
+                app = app,
+                fallback = Icons.Rounded.Map,
+                selected = on(app),
+                onClick = { actions.taskbarClick(app) },
+                onLongClick = { actions.taskbarLongPress(app) },
+            )
+        }
+        media?.let { app ->
+            RailApp(app, Icons.Rounded.MusicNote, on(app), onClick = { actions.openApp(app) })
+        }
+        recent.take(recentSlots).forEach { app ->
+            val isNuvio = app.packageName == NUVIO_PACKAGE
+            RailApp(
+                app = app,
+                fallback = Icons.Rounded.Apps,
+                selected = on(app),
+                onClick = { if (isNuvio) actions.taskbarClick(app) else actions.openApp(app) },
+                onLongClick = if (isNuvio) ({ actions.taskbarLongPress(app) }) else null,
+            )
+        }
+        phone?.let { app -> RailApp(app, Icons.Rounded.Call, on(app), onClick = { actions.openApp(app) }) }
+        settings?.takeIf { !tighterBar }?.let { app ->
+            RailApp(app, Icons.Rounded.Settings, on(app), onClick = { actions.openApp(app) })
+        }
     }
     val menu: @Composable () -> Unit = {
-        if (state.screen == CarScreen.Dashboard) RailButton(Icons.Rounded.Apps, "Apps", selected = false) { actions.openLauncher() }
-        else RailButton(Icons.Rounded.Home, "Home", selected = false) { actions.goHome() }
+        if (state.screen == CarScreen.Dashboard) {
+            RailButton(Icons.Rounded.Apps, "Apps", selected = false, onClick = { actions.openLauncher() })
+        } else {
+            RailButton(Icons.Rounded.Home, "Home", selected = false, onClick = { actions.goHome() })
+        }
     }
     val mic: @Composable () -> Unit = { MicButton(state.listening) { actions.assistant() } }
     val bell = { state.apps.firstOrNull { it.kind == CarAppKind.NOTIFICATIONS }?.let(actions::openApp) }
@@ -281,29 +322,61 @@ internal fun Clock() {
     Text(text, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun RailButton(icon: ImageVector, label: String, selected: Boolean, onClick: () -> Unit) {
+private fun RailButton(
+    icon: ImageVector,
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
+) {
     val d = LocalCarDimens.current
     val bg = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
     val fg = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+    val interaction = if (onLongClick == null) {
+        Modifier.clickable(onClick = onClick)
+    } else {
+        Modifier.combinedClickable(
+            onClick = onClick,
+            onLongClickLabel = "Split screen",
+            onLongClick = onLongClick,
+        )
+    }
     Box(
-        Modifier.size(d.touchTarget).clip(RoundedCornerShape(24.dp)).background(bg).clickable(onClick = onClick),
+        Modifier.size(d.touchTarget).clip(RoundedCornerShape(24.dp)).background(bg).then(interaction),
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, contentDescription = label, tint = fg, modifier = Modifier.size(d.iconSize))
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun RailApp(app: CarAppEntry?, fallback: ImageVector, selected: Boolean, onClick: () -> Unit) {
+private fun RailApp(
+    app: CarAppEntry?,
+    fallback: ImageVector,
+    selected: Boolean,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
+) {
     val d = LocalCarDimens.current
     if (app?.icon == null) {
-        RailButton(fallback, app?.label ?: "", selected, onClick)
+        RailButton(fallback, app?.label ?: "", selected, onClick, onLongClick)
         return
     }
     val ring = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
+    val interaction = if (onLongClick == null) {
+        Modifier.clickable(onClick = onClick)
+    } else {
+        Modifier.combinedClickable(
+            onClick = onClick,
+            onLongClickLabel = "Split screen",
+            onLongClick = onLongClick,
+        )
+    }
     Box(
-        Modifier.size(d.touchTarget).clip(RoundedCornerShape(24.dp)).background(ring).clickable(onClick = onClick),
+        Modifier.size(d.touchTarget).clip(RoundedCornerShape(24.dp)).background(ring).then(interaction),
         contentAlignment = Alignment.Center,
     ) {
         Image(app.icon.asImageBitmap(), app.label, Modifier.size(48.dp).clip(CircleShape))

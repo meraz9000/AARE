@@ -136,6 +136,15 @@ interface CarActions {
 
     /** Opens [app] beside the app that is already on screen (or the most recent one). */
     fun openInSplit(app: CarAppEntry)
+
+    /** Taskbar press: swaps panes when [app] is already in a split, otherwise opens it. */
+    fun taskbarClick(app: CarAppEntry)
+
+    /**
+     * Taskbar long-press: starts a split with [app], or leaves the split and shows [app] full
+     * screen when it is already one of the two split apps.
+     */
+    fun taskbarLongPress(app: CarAppEntry)
     fun goHome()
     fun openLauncher()
     fun assistant()
