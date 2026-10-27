@@ -178,15 +178,13 @@ class ProjectedHost(
                     reply?.writeStrongBinder(displayManager)
                 }
                 19 -> {
-                    val name = runCatching { data.readString() }.getOrNull()
-                    runCatching { data.readInt() }
+                    val name = readSettingName(data)
                     Log.i(TAG, "ICar setting $name queried")
                     reply?.writeNoException()
                     reply?.writeInt(0)
                 }
                 71 -> {
-                    val name = runCatching { data.readString() }.getOrNull()
-                    runCatching { data.readInt() }
+                    val name = readSettingName(data)
                     val value = when (name) {
                         "client_fullscreen_presentation", "presentation_clear_parent_padding" -> 1
                         else -> 0
@@ -333,7 +331,9 @@ class ProjectedHost(
                 data.writeInt(displayId) // CarDisplayId: display hosting the SurfaceView
                 data.writeInt(0) // CarRegionId
                 data.writeInt(1) // DrawingSpec presence
-                writeDrawingSpec(data, width, height, densityDpi, boundSurface, Rect(0, 0, width, height), displayId, inputTransferToken)
+                // DrawingSpec.e is a system-window insets Rect, not the content bounds.
+                // Passing (0,0,width,height) made Maps think the entire content was inset.
+                writeDrawingSpec(data, width, height, densityDpi, boundSurface, Rect(0, 0, 0, 0), displayId, inputTransferToken)
                 val appIntent = Intent(Intent.ACTION_MAIN).setPackage(component.packageName)
                 val projectionConfig = Bundle().apply {
                     putBoolean("CANCEL_PENDING_LIFECYCLE_EVENTS_FOR_FINISH_ENABLED", false)
@@ -574,22 +574,24 @@ class ProjectedHost(
         val start = parcel.dataPosition()
         parcel.writeInt(20293 or 0xFFFF0000.toInt())
         parcel.writeInt(0)
-        writeStringField(parcel, 1, "AARE")
-        writeStringField(parcel, 2, "Projected")
-        writeStringField(parcel, 3, "AARE")
-        writeStringField(parcel, 4, "AARE")
+        // Match the stock Desktop Head Unit's CarInfo exactly: Maps uses the head-unit
+        // protocol version (1.7 here) when deciding which input/UI features are available.
+        writeStringField(parcel, 1, "Google")
+        writeStringField(parcel, 2, "Desktop Head Unit")
+        writeStringField(parcel, 3, "2015")
+        writeStringField(parcel, 4, "5abcfda96937f794")
         parcel.writeInt(5 or 0x00040000)
-        parcel.writeInt(2026)
+        parcel.writeInt(1)
         parcel.writeInt(6 or 0x00040000)
-        parcel.writeInt(0)
+        parcel.writeInt(7)
         parcel.writeInt(7 or 0x00040000)
         parcel.writeInt(0)
         parcel.writeInt(8 or 0x00040000)
         parcel.writeInt(0)
-        writeStringField(parcel, 9, "")
-        writeStringField(parcel, 10, "")
-        writeStringField(parcel, 11, "")
-        writeStringField(parcel, 12, "")
+        writeStringField(parcel, 9, "Google")
+        writeStringField(parcel, 10, "Desktop Head Unit")
+        writeStringField(parcel, 11, "2022-03-30-438482292")
+        writeStringField(parcel, 12, "2.0-mac-arm64")
         parcel.writeInt(13 or 0x00040000)
         parcel.writeInt(0)
         parcel.writeInt(14 or 0x00040000)
@@ -597,7 +599,7 @@ class ProjectedHost(
         parcel.writeInt(15 or 0x00040000)
         parcel.writeInt(0)
         writeStringField(parcel, 16, "")
-        writeStringField(parcel, 17, "")
+        writeStringField(parcel, 17, "Google")
         parcel.writeInt(18 or 0x00040000)
         parcel.writeInt(1)
         val end = parcel.dataPosition()
@@ -615,6 +617,26 @@ class ProjectedHost(
         parcel.setDataPosition(start + 4)
         parcel.writeInt(end - (start + 8))
         parcel.setDataPosition(end)
+    }
+
+    /**
+     * Reads the setting name from an ICar setting query. Binder's onTransact Parcel starts
+     * with the interface token, so this matches the same header/token layout used by logInbound.
+     */
+    private fun readSettingName(data: Parcel): String? {
+        val pos = data.dataPosition()
+        return try {
+            data.setDataPosition(0)
+            data.readInt() // strict mode policy
+            data.readInt() // work source uid
+            if (data.dataAvail() >= 4) data.readInt() // header marker
+            data.readString() // interface token
+            data.readString() // setting name
+        } catch (_: Throwable) {
+            null
+        } finally {
+            data.setDataPosition(pos)
+        }
     }
 
     /** Debug: every call Maps makes into AARE, with its interface token and a hex peek of the args. */
@@ -652,7 +674,9 @@ class ProjectedHost(
             parcel.writeInt(
                 when (id) {
                     2, 3 -> 1  // has a touchscreen and a search button
-                    7 -> 1     // capacitive touchscreen
+                    7 -> 3     // stock gearhead reports 3, not 1
+                    9 -> 48    // stock gearhead touchpad/finger thresholds
+                    10 -> 64
                     else -> 0
                 },
             )

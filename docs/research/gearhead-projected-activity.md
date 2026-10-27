@@ -114,7 +114,7 @@ that the app is ready. The host must put the surface into `DrawingSpec.d`.
 | 2 | `int` | height |
 | 3 | `int` | density DPI |
 | 4 | `Surface` | host-provided render target |
-| 5 | `Rect` | content insets |
+| 5 | `Rect` | **system-window insets**, not content bounds; stock gearhead passes its inset rect, and an empty `Rect()` is correct when there are no insets |
 | 6 | `int` | flags |
 | 7 | `int` | display id |
 | 8 | `Bundle` | optional extras (null is fine) |
@@ -388,10 +388,13 @@ logging the full setup/resume sequence.
 Maps reads `CarUiInfo` before enabling map gestures: AARE sets `b` (hasTouchscreen), `c`
 (search button) and `g` (capacitive) instead of reporting a car with no touchscreen. With the
 trusted virtual display + `VirtualTouchscreen` path, native single-finger touch reaches Maps'
-map view and its gesture detector recognizes drags, but Maps does not pan the camera. (An earlier
-version of this note said a drag moved the camera; the screenshot cited,
-`docs/screenshots/aare-headunit-native-touch.png`, only shows Maps' default camera position.) See
-[`maps-touch-investigation.md`](maps-touch-investigation.md). Multi-touch pinch is untested.
+map view, its gesture detector recognizes drags, and the map pans. The last blocker was
+`DrawingSpec.e`: AARE had been putting the content bounds `(0, 0, width, height)` there, but
+Maps' `bemp.u(DrawingSpec)` treats that field as the system-window insets. Stock gearhead
+passes its inset rect (`jmw.o()`), not the content rectangle. Sending the full bounds made Maps
+treat the whole content as inset and broke its hit-testing/UI region; an empty `Rect()` fixed
+native touch. See [`maps-touch-investigation.md`](maps-touch-investigation.md). Multi-touch
+pinch is still untested on hardware.
 
 For audio, AARE captures the car's system-audio channel as well as media and guidance, so Maps'
 tap sounds are played by the car instead of the phone speaker. For GPS, AARE feeds the car's
