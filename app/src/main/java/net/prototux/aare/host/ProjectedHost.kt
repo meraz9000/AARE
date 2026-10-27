@@ -59,6 +59,7 @@ class ProjectedHost(
     private var width = 0
     private var height = 0
     private var densityDpi = 0
+    private var displayId = 0
     private var touchDownTime = 0L
     @Volatile private var generation = 0
 
@@ -176,10 +177,23 @@ class ProjectedHost(
                     reply?.writeNoException()
                     reply?.writeStrongBinder(displayManager)
                 }
-                19, 71 -> {
-                    runCatching { data.readString(); data.readInt() }
+                19 -> {
+                    val name = runCatching { data.readString() }.getOrNull()
+                    runCatching { data.readInt() }
+                    Log.i(TAG, "ICar setting $name queried")
                     reply?.writeNoException()
                     reply?.writeInt(0)
+                }
+                71 -> {
+                    val name = runCatching { data.readString() }.getOrNull()
+                    runCatching { data.readInt() }
+                    val value = when (name) {
+                        "client_fullscreen_presentation", "presentation_clear_parent_padding" -> 1
+                        else -> 0
+                    }
+                    Log.i(TAG, "ICar setting $name -> $value")
+                    reply?.writeNoException()
+                    reply?.writeInt(value)
                 }
                 55 -> {
                     runCatching { data.readString(); data.createStringArrayList() }
@@ -215,7 +229,7 @@ class ProjectedHost(
      * resize; the old binding is torn down first.
      */
     fun start(surface: Surface, width: Int, height: Int, densityDpi: Int) {
-        startInternal(surface, width, height, densityDpi, null, null)
+        startInternal(surface, width, height, densityDpi, 0, null, null)
     }
 
     /**
@@ -225,8 +239,9 @@ class ProjectedHost(
      */
     fun start(view: SurfaceView, width: Int, height: Int, densityDpi: Int) {
         val token = runCatching { view.rootSurfaceControl?.inputTransferToken }.getOrNull()
-        Log.i(TAG, "start view ${width}x${height} @${densityDpi}dpi token=${token != null}")
-        startInternal(view.holder.surface, width, height, densityDpi, token, view)
+        val viewDisplayId = runCatching { view.display?.displayId }.getOrNull() ?: 0
+        Log.i(TAG, "start view ${width}x${height} @${densityDpi}dpi display=$viewDisplayId token=${token != null}")
+        startInternal(view.holder.surface, width, height, densityDpi, viewDisplayId, token, view)
     }
 
     private fun startInternal(
@@ -234,11 +249,13 @@ class ProjectedHost(
         width: Int,
         height: Int,
         densityDpi: Int,
+        displayId: Int,
         token: InputTransferToken?,
         view: SurfaceView?,
     ) {
         if (this.surface === surface && this.width == width && this.height == height &&
-            this.densityDpi == densityDpi && this.inputTransferToken == token && connection != null
+            this.densityDpi == densityDpi && this.displayId == displayId &&
+            this.inputTransferToken == token && connection != null
         ) return
         stop()
         if (width <= 0 || height <= 0) return
@@ -249,6 +266,7 @@ class ProjectedHost(
         this.width = width
         this.height = height
         this.densityDpi = densityDpi
+        this.displayId = displayId
         touchDownTime = 0L
         generation++
         bind(generation)
@@ -310,12 +328,12 @@ class ProjectedHost(
         Thread.sleep(300)
         if (setupGeneration != generation || surface !== boundSurface || service == null) return
 
-        Log.i(TAG, "onProjectionStart surface ${width}x${height} @${densityDpi}dpi")
+        Log.i(TAG, "onProjectionStart surface ${width}x${height} @${densityDpi}dpi display=$displayId")
         if (!call(binder, "onProjectionStart", 26) { data ->
-                data.writeInt(0) // CarDisplayId: main display
+                data.writeInt(displayId) // CarDisplayId: display hosting the SurfaceView
                 data.writeInt(0) // CarRegionId
                 data.writeInt(1) // DrawingSpec presence
-                writeDrawingSpec(data, width, height, densityDpi, boundSurface, Rect(0, 0, width, height), 0, inputTransferToken)
+                writeDrawingSpec(data, width, height, densityDpi, boundSurface, Rect(0, 0, width, height), displayId, inputTransferToken)
                 val appIntent = Intent(Intent.ACTION_MAIN).setPackage(component.packageName)
                 val projectionConfig = Bundle().apply {
                     putBoolean("CANCEL_PENDING_LIFECYCLE_EVENTS_FOR_FINISH_ENABLED", false)
@@ -332,7 +350,7 @@ class ProjectedHost(
 
         Thread.sleep(300)
         if (setupGeneration != generation || surface !== boundSurface || service == null) return
-        call(binder, "onProjectionResume", 4) { data -> data.writeInt(0) }
+        call(binder, "onProjectionResume", 4) { data -> data.writeInt(displayId) }
         // The app's CarActivityHost ignores touch while it believes the display has no
         // input focus. Real gearhead sends this after the resume/window handshake.
         sendInputFocus(focused = true, touchMode = true)
@@ -403,7 +421,7 @@ class ProjectedHost(
         copy.source = InputDevice.SOURCE_TOUCHSCREEN
         try {
             oneWay(7) { data ->
-                data.writeInt(0) // CarDisplayId
+                data.writeInt(displayId) // CarDisplayId
                 data.writeInt(1) // MotionEvent presence
                 copy.writeToParcel(data, 0)
             }
@@ -424,7 +442,7 @@ class ProjectedHost(
         event.source = InputDevice.SOURCE_TOUCHSCREEN
         try {
             oneWay(7) { data ->
-                data.writeInt(0) // CarDisplayId
+                data.writeInt(displayId) // CarDisplayId
                 data.writeInt(1) // MotionEvent presence
                 event.writeToParcel(data, 0)
             }
@@ -438,7 +456,7 @@ class ProjectedHost(
         val event = KeyEvent(if (down) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP, code)
         try {
             oneWay(8) { data ->
-                data.writeInt(0) // CarDisplayId
+                data.writeInt(displayId) // CarDisplayId
                 data.writeInt(1) // KeyEvent presence
                 event.writeToParcel(data, 0)
             }
