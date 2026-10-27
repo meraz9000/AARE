@@ -29,7 +29,8 @@ import android.view.Surface
  * (tx 4). The app creates a Presentation on that surface and draws its real UI into it.
  *
  * The service checks CAPTURE_VIDEO_OUTPUT inside the app; a normal install is refused. See
- * docs/research/gearhead-projected-activity.md for the rooted/Frida development path.
+ * docs/research/gearhead-projected-activity.md and tools/aare-hooks/README.md for the
+ * root + Vector/LSPosed module (or the Frida development harness).
  */
 class ProjectedHost(
     context: Context,
@@ -292,7 +293,7 @@ class ProjectedHost(
         } catch (t: Throwable) {
             val message = if (t is SecurityException) {
                 "Maps refused the projection: ${t.message}. " +
-                    "This feature needs CAPTURE_VIDEO_OUTPUT (root/Frida development path)."
+                    "Install the AARE Projection Hooks module (root + Vector/LSPosed), or use the Frida development harness."
             } else {
                 "$label failed: ${t.message ?: t.javaClass.simpleName}"
             }
