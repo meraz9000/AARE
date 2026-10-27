@@ -143,9 +143,17 @@ class MainActivity : ComponentActivity() {
 
     /** Debug builds only: lets ./headunit.sh switch the head unit server on over adb. Returns true if applied. */
     private fun applyDebugExtras(intent: Intent?): Boolean {
-        if (!net.prototux.aare.BuildConfig.DEBUG || intent?.hasExtra("hu_server") != true) return false
-        Settings(this).headUnitServer = intent.getBooleanExtra("hu_server", false)
-        return true
+        if (!net.prototux.aare.BuildConfig.DEBUG) return false
+        var applied = false
+        intent?.getStringExtra("launchPackage")?.takeIf { it.isNotBlank() }?.let {
+            CarRuntime.pendingLaunchPackage = it
+            applied = true
+        }
+        if (intent?.hasExtra("hu_server") == true) {
+            Settings(this).headUnitServer = intent.getBooleanExtra("hu_server", false)
+            applied = true
+        }
+        return applied
     }
 }
 

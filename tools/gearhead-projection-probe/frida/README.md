@@ -49,6 +49,21 @@ entry is the same path, so once the preview is open the Maps tile works normally
 `CarPreviewActivity` is not exported; the driver uses `su -c`, so the phone must be rooted.
 Set `ANDROID_SERIAL` if more than one device is attached.
 
+### Testing through the desktop head unit
+
+```sh
+python3 run_aare.py --car     # keep this running
+# in another terminal, from the AARE repo root:
+./headunit.sh --res 1280x720
+```
+
+`--car` starts `MainActivity` with the debug head-unit server on and remembers the package;
+the first real `CarSession` opens that app when the catalog loads. This exercises the full
+AAP path (encoder → head unit) instead of only the phone preview. The hook lives in the Maps
+process, so the laptop and this script must stay connected for the whole session. With a
+real car, use wireless Android Auto plus adb-over-Wi-Fi, or replace Frida with an on-device
+hook (LSPosed/Magisk) so the laptop is not needed.
+
 Expected host log:
 
 ```

@@ -37,7 +37,7 @@ It needs no Google Play Services.
 | Sensors: driving restrictions, night mode, car GPS and compass (passed to nav apps) | done |
 | Every other sensor the car offers (RPM, odometer, fuel and range, temperature, HVAC, doors, lights, tyres, accelerometer, gyroscope…) for car apps (car hardware API) and the assistant | new, tested only with the desktop head unit's fake car |
 | Car App Library host: handshake, templates, map surface, navigation trips, alerts, car hardware, microphone | done |
-| Google Maps' private projected activity (experimental): bind, `DrawingSpec` surface, resume, touch/key forwarding | display proven on rooted hardware; input needs car testing |
+| Google Maps' private projected activity (experimental): bind, `DrawingSpec` surface, resume, touch/key forwarding | display proven in the phone preview and through the desktop head unit; input needs car testing |
 | Waze's public Car App Library service (experimental): HostValidator test hook | reaches Waze's one-time setup screen; full navigation untested |
 | Template rendering (list, grid, pane, message, search, sign-in, tabs, navigation, map...) | done |
 | Media apps: browse, search, now playing, transport, active session tracking | done |
@@ -147,7 +147,8 @@ and on the car screen. This uses the legacy `com.google.android.gms.car.ICarProj
 which Maps protects with the signature permission `CAPTURE_VIDEO_OUTPUT`; a normal install is
 refused. On a rooted test phone, a UID-scoped Maps-process hook is the working path (see
 [docs/research/gearhead-projected-activity.md](docs/research/gearhead-projected-activity.md)).
-The map display is proven; touch and key forwarding are wired, but map gestures still need
+The map display is proven in the phone preview and through AARE's desktop head unit (the full
+AAP path, not just Compose); touch and key forwarding are wired, but map gestures still need
 testing in a car. Waze declares the public Car App Library, not `ICarProjection`; its
 `HostValidator` rejects AARE's signing certificate. A test-only Waze-process hook can allow AARE
 and reaches Waze's own one-time setup screen, but Waze still has to be set up and signed in on the
@@ -155,6 +156,8 @@ phone before its navigation screen can render. See the same research document an
 `tools/gearhead-projection-probe/frida/run_waze.py`; this is separate from the Maps protocol.
 
 ![Google Maps' navigation UI inside AARE's car screen, with the AARE rail on the left](docs/screenshots/aare-google-maps.png)
+
+![Google Maps rendered through AARE's desktop head unit](docs/screenshots/aare-headunit-maps.png)
 
 On the phone, the *Apps* page sets which apps show in the car and in which order, and the
 *Messages* page has Android Auto's driving options: Do Not Disturb while connected (calls and

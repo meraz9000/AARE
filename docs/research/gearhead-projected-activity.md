@@ -369,8 +369,10 @@ For Maps, the implemented shape is:
 - `CarPreviewActivity --es launchPackage com.google.android.apps.maps` is a deterministic
   development launcher; the normal path is the Maps tile in the app grid.
 
-On the rooted Pixel this rendered the real 3D navigation map in the car preview (screenshot in
-`docs/screenshots/aare-google-maps.png`) and the host logged the full setup/resume sequence.
+On the rooted Pixel this rendered the real 3D navigation map in the phone preview (screenshot in
+`docs/screenshots/aare-google-maps.png`) and through AARE's desktop head unit, i.e. the full AAP
+encoder/transport path (screenshot in `docs/screenshots/aare-headunit-maps.png`), with the host
+logging the full setup/resume sequence.
 Touch events reach `ProjectedHost` with the correct local coordinates; whether Maps pans while
 it is following a route is still being checked. The permission gate is unchanged: AARE itself
 cannot hold `CAPTURE_VIDEO_OUTPUT`, so the working test path is the UID-scoped Maps-process hook

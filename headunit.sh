@@ -51,7 +51,7 @@ if [ "$MODE" = aare ]; then
     BIN="$ROOT/headunit/build/install/aare-headunit/bin/aare-headunit"
     # Rebuild when the sources' contents changed (not their dates: copies and syncs keep old dates).
     STAMP="$ROOT/headunit/build/sources.cksum"
-    SUM=$(find "$ROOT/headunit/src" "$ROOT/aap/src" "$ROOT/headunit/build.gradle.kts" "$ROOT/aap/build.gradle.kts" -type f | sort | xargs cat | cksum)
+    SUM=$(cd "$ROOT" && find headunit/src aap/src headunit/build.gradle.kts aap/build.gradle.kts -type f -print0 | sort -z | xargs -0 cat | cksum)
     if [ ! -x "$BIN" ] || [ "$(cat "$STAMP" 2>/dev/null)" != "$SUM" ]; then
         echo "Building the desktop head unit…"
         "$ROOT/build.sh" :headunit:installDist --console=plain -q

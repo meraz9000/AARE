@@ -407,6 +407,13 @@ class CarRuntime(
         entries.sortWith(compareBy<CarAppEntry>({ order[orderKey(it)] ?: Int.MAX_VALUE }, { it.label.lowercase() }))
         ui.apps.clear()
         ui.apps.addAll(entries)
+        // A debug/head-unit launch can ask for an app before the car session has loaded the catalog.
+        pendingLaunchPackage?.let { pkg ->
+            entries.firstOrNull { it.packageName == pkg }?.let { app ->
+                pendingLaunchPackage = null
+                actions.openApp(app)
+            }
+        }
         // Restore the last navigation and media apps, so the dashboard isn't empty.
         if (ui.activeNavAppId == null) {
             val nav = entries.filter { it.kind == CarAppKind.NAVIGATION }
@@ -685,6 +692,11 @@ class CarRuntime(
 
     companion object {
         private const val TAG = "AareRuntime"
+
+        /** Set by MainActivity/head-unit debug extras; consumed by the first runtime that sees the package. */
+        @Volatile
+        var pendingLaunchPackage: String? = null
+
         fun carId(app: CarAppInfo) = "car:${app.service.flattenToShortString()}"
         fun mediaId(pkg: String) = "media:$pkg"
         fun messagingId(pkg: String) = "messages:$pkg"

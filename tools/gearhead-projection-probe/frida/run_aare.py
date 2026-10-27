@@ -6,7 +6,8 @@ needed for a normal AARE session; it only exists because Maps checks the signatu
 permission CAPTURE_VIDEO_OUTPUT inside its own process.
 
 Example:
-    python3 run_aare.py
+    python3 run_aare.py                 # phone preview (CarPreviewActivity)
+    python3 run_aare.py --car           # real/desktop-head-unit AARE session
     python3 run_aare.py com.google.android.apps.maps
 """
 import os
@@ -21,6 +22,7 @@ HERE = Path(__file__).resolve().parent
 JS = HERE / "maps_capture_agent_compiled.js"
 SERIAL = os.environ.get("ANDROID_SERIAL", "")
 PREVIEW = "net.prototux.aare/.ui.CarPreviewActivity"
+MAIN = "net.prototux.aare/.ui.MainActivity"
 DEFAULT_PACKAGE = "com.google.android.apps.maps"
 
 
@@ -44,7 +46,9 @@ def on_message(message, data):
 
 
 def main():
-    package = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_PACKAGE
+    car_mode = "--car" in sys.argv
+    args = [a for a in sys.argv[1:] if a != "--car"]
+    package = args[0] if args else DEFAULT_PACKAGE
     if not JS.exists():
         sys.exit(f"missing {JS}; build it with frida-compile, see README.md")
 
@@ -69,10 +73,16 @@ def main():
     device.resume(pid)
     time.sleep(2)
 
-    print("[driver] starting AARE preview", flush=True)
-    result = shell_root(
-        f"am start -W -n {PREVIEW} --es launchPackage {package}"
-    )
+    if car_mode:
+        print("[driver] starting AARE car mode (head-unit server on)", flush=True)
+        result = shell_root(
+            f"am start -W -n {MAIN} --ez hu_server true --es launchPackage {package}"
+        )
+    else:
+        print("[driver] starting AARE preview", flush=True)
+        result = shell_root(
+            f"am start -W -n {PREVIEW} --es launchPackage {package}"
+        )
     print(result.stdout, flush=True)
     print(result.stderr, flush=True)
 
