@@ -379,8 +379,7 @@ permission strategy and reconnect/retry polish.
 
 ## 7. Waze is not this protocol
 
-Contrary to the earlier assumption, current Waze declares a public AndroidX Car App Library
-service:
+Current Waze declares a public AndroidX Car App Library service:
 
 ```
 com.waze.car_lib.WazeCarAppService
@@ -390,16 +389,47 @@ com.waze.car_lib.WazeCarAppService
 ```
 
 Its `res/xml/automotive_app_desc.xml` contains `<uses name="template"/>`. It is therefore a
-public Car App Library app, not a private-projection app. On the test phone AARE 10360 did bind
-the service and negotiated Car App API 8, but Waze rejected the handshake with:
+public Car App Library app, not a private-projection app. AARE 10360 did bind the service and
+negotiated Car App API 8, but Waze rejected the handshake with:
 
 ```
 java.lang.SecurityException: Unrecognized host with uid 10360
 ```
 
-So Waze's remaining barrier is host identity/allowlisting, not the `ICarProjection` protocol.
-That is a separate experiment; it does not help Maps, which declares
-`<uses name="projection"/>` and has no `CarAppService`.
+Waze's `WazeCarAppService.createHostValidator()` uses the AndroidX `HostValidator` and an
+allow-list resource. Desugared from the installed APK:
+
+```java
+public final HostValidator createHostValidator() {
+    if (!ConfigValues.CONFIG_VALUE_CAR_LIB_VALIDATE_HOST_CONNECTIONS.b().booleanValue()) {
+        return HostValidator.ALLOW_ALL_HOSTS_VALIDATOR;
+    }
+    HostValidator.Builder builder = new HostValidator.Builder(this);
+    builder.addAllowedHosts(R.array.hosts_allowlist);
+    return builder.build();
+}
+```
+
+The rejection is only the signed-certificate allow-list, not a protocol gap. Waze's own log
+prints the exact entry it would accept, including AARE's debug certificate SHA-256:
+
+```
+.addAllowedHost("net.prototux.aare",
+    "d137126e5e5d877f461e7a2f49f051386eca171b8a81ea8ec67a7b25643e2322");
+```
+
+On the rooted test phone, a test-only Waze-process Frida hook
+(`tools/gearhead-projection-probe/frida/waze_host_agent.js`) makes
+`HostValidator.isValidHost(HostInfo)` return true for AARE. `run_waze.py` spawns Waze with the
+hook and opens AARE's preview on `com.waze`. The result is Waze's own car UI, starting with its
+one-time setup screen:
+
+![Waze's one-time setup screen in AARE, after the test-only HostValidator hook allowed AARE's host](screenshots/aare-waze-host-hook.png)
+
+This is a separate path: Waze does not use `ICarProjection`, and the hook does not help Maps.
+The hook is for development only. Waze's setup screen asks for Waze to be opened and signed in on
+the phone first; full navigation in AARE still has to be tested after that setup. No Waze APK
+patch or re-sign is involved.
 
 ## 8. Reproduction
 
@@ -432,6 +462,9 @@ python3 run_aare.py
 # Open CarPreviewActivity directly:
 adb shell su -c 'am start -W -n net.prototux.aare/.ui.CarPreviewActivity \
   --es launchPackage com.google.android.apps.maps'
+
+# Waze's public CarAppService, with the test-only host-validator hook:
+python3 run_waze.py
 ```
 
 The probe was built against Android SDK 37, build-tools 36.0.0, and the debug keystore. It requests
@@ -448,5 +481,6 @@ AARE. A root-side grant or a Maps-process hook is required; the UID-scoped hook 
 proven here. Root alone, from a shell or Shizuku user service, is not enough because AMS will not
 bind the service for a process it does not know.
 
-For Waze, the public Car App Library path is available today and should be tested before spending
-more time on private projection.
+For Waze, the public Car App Library path works to Waze's own setup screen once a test-only
+host-validator hook allows AARE; that is a separate host-identity problem, not `ICarProjection`.
+After Waze is set up and signed in on the phone, the navigation screen can be tested the same way.

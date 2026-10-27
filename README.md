@@ -38,6 +38,7 @@ It needs no Google Play Services.
 | Every other sensor the car offers (RPM, odometer, fuel and range, temperature, HVAC, doors, lights, tyres, accelerometer, gyroscope…) for car apps (car hardware API) and the assistant | new, tested only with the desktop head unit's fake car |
 | Car App Library host: handshake, templates, map surface, navigation trips, alerts, car hardware, microphone | done |
 | Google Maps' private projected activity (experimental): bind, `DrawingSpec` surface, resume, touch/key forwarding | display proven on rooted hardware; input needs car testing |
+| Waze's public Car App Library service (experimental): HostValidator test hook | reaches Waze's one-time setup screen; full navigation untested |
 | Template rendering (list, grid, pane, message, search, sign-in, tabs, navigation, map...) | done |
 | Media apps: browse, search, now playing, transport, active session tracking | done |
 | Messaging apps: conversations from notifications, read aloud, mark as read, reply when parked | new |
@@ -147,8 +148,11 @@ which Maps protects with the signature permission `CAPTURE_VIDEO_OUTPUT`; a norm
 refused. On a rooted test phone, a UID-scoped Maps-process hook is the working path (see
 [docs/research/gearhead-projected-activity.md](docs/research/gearhead-projected-activity.md)).
 The map display is proven; touch and key forwarding are wired, but map gestures still need
-testing in a car. Waze declares the public Car App Library but currently rejects AARE's host
-identity, so it is not part of this path.
+testing in a car. Waze declares the public Car App Library, not `ICarProjection`; its
+`HostValidator` rejects AARE's signing certificate. A test-only Waze-process hook can allow AARE
+and reaches Waze's own one-time setup screen, but Waze still has to be set up and signed in on the
+phone before its navigation screen can render. See the same research document and
+`tools/gearhead-projection-probe/frida/run_waze.py`; this is separate from the Maps protocol.
 
 ![Google Maps' navigation UI inside AARE's car screen, with the AARE rail on the left](docs/screenshots/aare-google-maps.png)
 
@@ -177,14 +181,18 @@ not affiliated with Apple; CarPlay is a trademark of Apple Inc.
 | Kind of app | Found by | In AARE |
 |---|---|---|
 | Car App Library apps (CoMaps, Organic Maps, OsmAnd, EV charging…) | `androidx.car.app.CarAppService` | yes |
+| Waze | public `CarAppService`, but its `HostValidator` rejects AARE | no without a host-validator test hook; hook reaches Waze's setup screen |
 | Media apps | `MediaBrowserService` / media3 `MediaLibraryService` | yes |
 | Messaging apps | `<uses name="notification"/>` in `automotive_app_desc`, and the default SMS app | yes, from their notifications |
-| Google Maps, Waze and other apps on Google's private car interface | Android Auto only | no |
+| Google Maps and other legacy GMS projected apps | Android Auto's private `ICarProjection` | Maps only, experimental rooted path |
 
-Some apps, Google Maps and Waze among them, draw their car screen through an undocumented
-interface that only Google's Android Auto app can host, and they check that the host is Google's.
-AARE can't host them. AARE's settings list every app that declares Android Auto support but that
-AARE can't show, with the reason. Two things make up for it:
+Google Maps and other legacy GMS apps draw their car screen through an undocumented
+`ICarProjection` interface that only Google's Android Auto app can host, and they check that the
+host is Google's. Maps is available through the experimental rooted path above; other apps have
+not been tried. Waze is different: it uses the public Car App Library but checks the host identity
+in `HostValidator`, so it needs the separate test hook described above. AARE's settings list every
+app that declares Android Auto support but that AARE can't show, with the reason. Two things make
+up for it:
 
 - **Their directions in the car.** While Google Maps, Waze or another app guides you on the
   phone, AARE reads its navigation notification and shows the next turn, the distance and the

@@ -51,6 +51,7 @@ google-services.json
 # Frida harness build outputs
 node_modules/
 maps_capture_agent_compiled.js
+waze_host_agent_compiled.js
 
 # Claude Code agent worktrees
 .claude/

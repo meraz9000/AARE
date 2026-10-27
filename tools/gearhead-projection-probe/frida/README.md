@@ -1,11 +1,16 @@
-# Rooted Maps permission hook
+# Rooted Maps and Waze hooks
 
 Maps enforces `android.permission.CAPTURE_VIDEO_OUTPUT` with `checkCallingPermission()` inside
 its own projection service. That permission is `signature`, so neither AARE nor the probe can
 request it normally. This hook makes the check return `PERMISSION_GRANTED` **only when the
 calling UID belongs to AARE or the probe**; Maps itself is not patched or re-signed.
 
-It is a development harness for the `PROJECTED` feature, not a production permission strategy.
+Waze uses the public Car App Library instead, but its `HostValidator` rejects AARE's signing
+certificate. `waze_host_agent.js` is a separate test-only hook for that handshake. It is not
+needed for Maps, and the Maps hook is not needed for Waze.
+
+Both are development harnesses for the experimental integration, not a production permission
+strategy.
 
 ## Prerequisites
 
@@ -59,6 +64,24 @@ Projecting
 The Maps map should appear inside AARE's car preview, with the AARE rail on the left. If Frida
 is not attached, AARE shows the expected `CAPTURE_VIDEO_OUTPUT` error instead of pretending to
 work.
+
+## Waze host-validator hook
+
+Waze is a public Car App Library app, but its `HostValidator` allow-list rejects AARE's debug
+certificate. `waze_host_agent.js` is a separate, test-only hook that accepts AARE in the Waze
+process; it does not touch Maps or the Waze APK. Compile it the same way:
+
+```sh
+./node_modules/.bin/frida-compile waze_host_agent.js -o waze_host_agent_compiled.js
+python3 run_waze.py
+```
+
+`run_waze.py` spawns Waze, loads the hook, resumes it, and opens AARE's preview with
+`--es launchPackage com.waze`. Without the hook, AARE logs
+`SecurityException: Unrecognized host with uid 10360` and shows Waze's “Waze stopped” screen.
+With it, Waze's own car UI starts at its “One-time setup” screen. Waze must then be opened and
+signed in on the phone; full navigation in AARE still needs a test after that setup. This is a
+host-identity workaround, not the `ICarProjection` protocol.
 
 ## Standalone probe
 
