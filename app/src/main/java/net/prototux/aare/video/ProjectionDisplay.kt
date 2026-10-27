@@ -12,6 +12,7 @@ import android.view.MotionEvent
 import android.view.KeyEvent
 import android.view.Surface
 import android.view.View
+import android.util.Log
 import android.view.WindowManager
 import androidx.activity.OnBackPressedDispatcher
 import androidx.activity.OnBackPressedDispatcherOwner
@@ -29,6 +30,7 @@ import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import java.util.concurrent.Executors
 
 /**
  * The car screen, rendered on the phone.
@@ -49,6 +51,9 @@ class ProjectionDisplay(
     private val display: VirtualDisplay
     private val virtualDevice: VirtualDeviceDisplay?
     private var presentation: CarPresentation? = null
+    private val touchExecutor = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "AARE-virtual-touch").apply { isDaemon = true }
+    }
 
     init {
         val virtual = VirtualDeviceDisplay.create(
@@ -70,7 +75,9 @@ class ProjectionDisplay(
 
     /** Must be called on the main thread. */
     fun show() {
-        val p = CarPresentation(context, display.display, content)
+        val d = display.display
+        Log.i("AareSession", "show display id=${d.displayId} valid=${d.isValid} name=${d.name}")
+        val p = CarPresentation(virtualDevice?.deviceContext ?: context, d, content)
         p.show()
         presentation = p
     }
@@ -81,9 +88,20 @@ class ProjectionDisplay(
     }
 
     fun dispatchTouch(event: MotionEvent) {
+        // Injecting through VirtualTouchscreen can synchronously wait for the target display's
+        // input pipeline. Doing that on the main thread deadlocks the window it is feeding.
+        val virtual = virtualDevice
+        if (virtual != null) {
+            val copy = MotionEvent.obtain(event)
+            event.recycle()
+            touchExecutor.execute {
+                virtual.sendTouch(copy)
+                copy.recycle()
+            }
+            return
+        }
         main.post {
-            val sent = virtualDevice?.sendTouch(event) == true
-            if (!sent) presentation?.window?.decorView?.dispatchTouchEvent(event)
+            presentation?.window?.decorView?.dispatchTouchEvent(event)
             event.recycle()
         }
     }
@@ -97,6 +115,7 @@ class ProjectionDisplay(
             presentation?.dismissSafely()
             presentation = null
             if (virtualDevice != null) virtualDevice.release() else display.release()
+            touchExecutor.shutdownNow()
         }
     }
 

@@ -67,28 +67,19 @@ class ProjectedHost(
                     Log.i(TAG, "callback: connection state $state")
                 }
                 35 -> {
-                    val debug = Parcel.obtain()
-                    runCatching {
-                        debug.appendFrom(data, 0, data.dataSize())
-                        debug.setDataPosition(0)
-                        val ints = IntArray(6) { debug.readInt() }
-                        Log.i(TAG, "callback: tx35 size=${data.dataSize()} pos=${data.dataPosition()} ints=${ints.joinToString()}")
-                    }
-                    debug.recycle()
+                    // Maps sends a SurfaceControlViewHost.SurfacePackage inside a Bundle.
+                    // The parcel begins with a 12-byte Binder header, then the callback
+                    // interface token, then the Parcelable presence int and Bundle.
                     data.setDataPosition(12)
-                    val iface = runCatching { data.readString() }.getOrNull()
-                    Log.i(TAG, "callback: tx35 iface=$iface")
+                    runCatching { data.readString() }
                     val present = runCatching { data.readInt() }.getOrDefault(0)
                     val extras = if (present != 0) {
                         runCatching { data.readBundle(javaClass.classLoader) }.getOrNull()
                     } else null
-                    val raw = extras?.get("surface_package")
-                    Log.i(
-                        TAG,
-                        "callback: tx35 present=$present keys=${extras?.keySet()} raw=${raw?.javaClass?.name}",
+                    val pkg = extras?.getParcelable(
+                        "surface_package",
+                        SurfaceControlViewHost.SurfacePackage::class.java,
                     )
-                    val pkg = extras?.getParcelable("surface_package", SurfaceControlViewHost.SurfacePackage::class.java)
-                    Log.i(TAG, "callback: tx35 pkg=${pkg != null}")
                     Log.i(TAG, "callback: surface package ${if (pkg != null) "yes" else "missing"}")
                     if (pkg != null) {
                         main.post {

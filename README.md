@@ -37,7 +37,7 @@ It needs no Google Play Services.
 | Sensors: driving restrictions, night mode, car GPS and compass (passed to nav apps) | done |
 | Every other sensor the car offers (RPM, odometer, fuel and range, temperature, HVAC, doors, lights, tyres, accelerometer, gyroscope…) for car apps (car hardware API) and the assistant | new, tested only with the desktop head unit's fake car |
 | Car App Library host: handshake, templates, map surface, navigation trips, alerts, car hardware, microphone | done |
-| Google Maps' private projected activity (experimental): bind, `DrawingSpec` surface, resume, touch/key forwarding | display proven in the phone preview, AARE's desktop head unit, Google's stock Desktop Head Unit, and on-device via the Vector/LSPosed module; input needs car testing |
+| Google Maps' private projected activity (experimental): bind, `DrawingSpec` surface, native touch, resume/key forwarding | display and native single-finger touch proven in AARE's desktop head unit and on-device via the Vector/LSPosed module; pinch and real-car touch still need testing |
 | Waze's public Car App Library service (experimental): HostValidator test hook | reaches Waze's one-time setup screen; full navigation untested |
 | Template rendering (list, grid, pane, message, search, sign-in, tabs, navigation, map...) | done |
 | Media apps: browse, search, now playing, transport, active session tracking | done |
@@ -149,9 +149,12 @@ refused. On a rooted phone, install the [AARE Projection Hooks](tools/aare-hooks
 (Vector/LSPosed) to grant that signature check only to AARE; Frida remains the development
 alternative (see
 [docs/research/gearhead-projected-activity.md](docs/research/gearhead-projected-activity.md)).
-The map display is proven in the phone preview and through AARE's desktop head unit (the full
-AAP path, not just Compose); touch is wired and verified in the desktop head unit, but the
-real-car path still needs testing. AARE reports a touchscreen in `CarUiInfo` (without that
+The map display and native single-finger touch are proven through AARE's desktop head unit (the
+full AAP path, not just Compose). Touch uses an AARE-owned trusted virtual display with an
+associated `VirtualTouchscreen`, so Maps receives real InputDispatcher events rather than
+synthetic `View.dispatchTouchEvent` calls. Pinch and the real-car path still need testing; the
+setup is invasive and requires the rooted-device steps in
+`tools/aare-virtualdevice-setup.sh`. AARE reports a touchscreen in `CarUiInfo` (without that
 Maps disables map gestures), routes Maps' system/tap sounds through the car's system-audio
 channel, and feeds the car's GPS into Android's mock location while "Use car GPS" is enabled.
 For car GPS, allow AARE as a mock-location app: either select it under Developer options →
@@ -164,7 +167,17 @@ Waze still has to be set up and signed in on the phone before its navigation scr
 See the same research document and `tools/gearhead-projection-probe/frida/run_waze.py`; this is
 separate from the Maps protocol.
 
+**Native touch setup (rooted development phone).** Maps receives input through an AARE-owned
+trusted virtual display and an associated `VirtualTouchscreen`. On the rooted Pixel, run
+`tools/aare-virtualdevice-setup.sh` once, then install the hooks module as above. This creates a
+CompanionDeviceManager app-streaming association and grants the role-managed
+`CREATE_VIRTUAL_DEVICE`/`ADD_TRUSTED_DISPLAY` permissions. It is invasive and device-specific;
+without it AARE falls back to the legacy surface path and Maps touch will not work. Pinch is
+still awaiting a real car/multi-touch test.
+
 ![Google Maps' navigation UI inside AARE's car screen, with the AARE rail on the left](docs/screenshots/aare-google-maps.png)
+
+![Google Maps receiving native touch through AARE's virtual touchscreen in the desktop head unit](docs/screenshots/aare-headunit-native-touch.png)
 
 ![Google Maps rendered through AARE's desktop head unit](docs/screenshots/aare-headunit-maps.png)
 

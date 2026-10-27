@@ -28,6 +28,7 @@ import java.util.concurrent.Executor
 internal class VirtualDeviceDisplay private constructor(
     val display: VirtualDisplay,
     private val device: Any,
+    val deviceContext: android.content.Context?,
     private val touchscreen: Any?,
     private val touchscreenSend: java.lang.reflect.Method?,
     private val touchscreenClose: java.lang.reflect.Method?,
@@ -37,7 +38,41 @@ internal class VirtualDeviceDisplay private constructor(
         val send = touchscreenSend ?: return false
         val ts = touchscreen ?: return false
         return runCatching {
-            send.invoke(ts, event)
+            val builderClass = Class.forName("android.hardware.input.VirtualTouchEvent\$Builder")
+            val builderCtor = builderClass.getDeclaredConstructor().apply { isAccessible = true }
+            fun method(name: String, vararg types: Class<*>): java.lang.reflect.Method =
+                builderClass.getDeclaredMethod(name, *types).apply { isAccessible = true }
+            val build = method("build")
+            val setAction = method("setAction", Integer.TYPE)
+            val setX = method("setX", java.lang.Float.TYPE)
+            val setY = method("setY", java.lang.Float.TYPE)
+            val setPointer = method("setPointerId", Integer.TYPE)
+            val setTime = method("setEventTimeNanos", java.lang.Long.TYPE)
+            val setPressure = method("setPressure", java.lang.Float.TYPE)
+            val setTool = method("setToolType", Integer.TYPE)
+            val setMajor = method("setMajorAxisSize", java.lang.Float.TYPE)
+            for (i in 0 until event.pointerCount) {
+                val action = when (event.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> 0 // VirtualTouchEvent.ACTION_DOWN
+                    MotionEvent.ACTION_UP -> 1 // ACTION_UP
+                    MotionEvent.ACTION_CANCEL -> 3 // ACTION_CANCEL
+                    MotionEvent.ACTION_POINTER_DOWN ->
+                        if (i == event.actionIndex) 0 else 2 // DOWN : MOVE
+                    MotionEvent.ACTION_POINTER_UP ->
+                        if (i == event.actionIndex) 1 else 2 // UP : MOVE
+                    else -> 2 // ACTION_MOVE
+                }
+                val b = builderCtor.newInstance()
+                setAction.invoke(b, action)
+                setX.invoke(b, event.getX(i))
+                setY.invoke(b, event.getY(i))
+                setPointer.invoke(b, event.getPointerId(i))
+                setTime.invoke(b, event.eventTime * 1_000_000L)
+                setPressure.invoke(b, event.getPressure(i))
+                setTool.invoke(b, 1) // TOOL_TYPE_FINGER
+                setMajor.invoke(b, 1f)
+                send.invoke(ts, build.invoke(b))
+            }
             true
         }.getOrElse {
             Log.w(TAG, "VirtualTouchscreen.sendTouchEvent failed", it)
@@ -53,8 +88,10 @@ internal class VirtualDeviceDisplay private constructor(
 
     companion object {
         private const val TAG = "AareVirtualDevice"
-        private const val VIRTUAL_DISPLAY_FLAG_SUPPORTS_TOUCH = 1 shl 10
+        private const val VIRTUAL_DISPLAY_FLAG_SUPPORTS_TOUCH = 1 shl 6
+        private const val VIRTUAL_DISPLAY_FLAG_TRUSTED = 1 shl 10
         private const val VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY = 1 shl 3
+        private const val VIRTUAL_DISPLAY_FLAG_PRESENTATION = 1 shl 1
         private const val VIRTUAL_DISPLAY_FLAG_PUBLIC = 1
 
         fun create(
@@ -66,11 +103,11 @@ internal class VirtualDeviceDisplay private constructor(
             surface: Surface,
         ): VirtualDeviceDisplay? {
             if (Build.VERSION.SDK_INT < 34) return null
-            if (context.checkSelfPermission("android.permission.CREATE_VIRTUAL_DEVICE") !=
-                PackageManager.PERMISSION_GRANTED
-            ) {
-                Log.i(TAG, "CREATE_VIRTUAL_DEVICE not granted; using DisplayManager fallback")
-                return null
+            val hasCreatePermission =
+                context.checkSelfPermission("android.permission.CREATE_VIRTUAL_DEVICE") ==
+                    PackageManager.PERMISSION_GRANTED
+            if (!hasCreatePermission) {
+                Log.i(TAG, "CREATE_VIRTUAL_DEVICE not granted; trying an owner-created device")
             }
 
             return runCatching {
@@ -87,7 +124,12 @@ internal class VirtualDeviceDisplay private constructor(
                 val devClose = device.javaClass.methods
                     .firstOrNull { it.name == "close" && it.parameterTypes.isEmpty() }
                 Log.i(TAG, "created display=$displayId touchscreen=${touchscreen != null}")
-                VirtualDeviceDisplay(display, device, touchscreen, send, tsClose, devClose)
+                val deviceContext = runCatching {
+                    device.javaClass.methods.firstOrNull {
+                        it.name == "createContext" && it.parameterTypes.isEmpty()
+                    }?.invoke(device) as? android.content.Context
+                }.getOrNull()
+                VirtualDeviceDisplay(display, device, deviceContext, touchscreen, send, tsClose, devClose)
             }.getOrElse {
                 Log.w(TAG, "VirtualDevice display unavailable; using DisplayManager fallback", it)
                 null
@@ -95,10 +137,13 @@ internal class VirtualDeviceDisplay private constructor(
         }
 
         private fun createDevice(context: Context, manager: Any): Any {
+            // This is the CompanionDeviceManager self-managed association created by
+            // tools/aare-virtualdevice-setup.sh for the app-streaming profile. It is
+            // the only association that VirtualDeviceManager allows AARE to operate.
             val builderClass = Class.forName("android.companion.virtual.VirtualDeviceParams\$Builder")
             val builder = builderClass.getDeclaredConstructor().newInstance()
             builderClass.getMethod("setLockState", Int::class.javaPrimitiveType)
-                .invoke(builder, 1)
+                .invoke(builder, 0)
             builderClass.getMethod("setUsersWithMatchingAccounts", Set::class.java)
                 .invoke(builder, setOf(Process.myUserHandle()))
             if (Build.VERSION.SDK_INT >= 35) {
@@ -119,8 +164,16 @@ internal class VirtualDeviceDisplay private constructor(
             val method = manager.javaClass.methods.first {
                 it.name == "createVirtualDevice" && it.parameterTypes.size == 2
             }
-            return method.invoke(manager, 1, params)
-                ?: error("createVirtualDevice returned null")
+            // Association IDs are local to CompanionDeviceManager and can change after a
+            // reinstall. Try likely IDs; skip ID 1 (gearhead's association on the test phone).
+            for (id in intArrayOf(3, 0, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)) {
+                val device = runCatching { method.invoke(manager, id, params) }.getOrNull()
+                if (device != null) {
+                    Log.i(TAG, "created virtual device association=$id")
+                    return device
+                }
+            }
+            error("createVirtualDevice failed for all candidate associations")
         }
 
         private fun createDisplay(
@@ -134,17 +187,16 @@ internal class VirtualDeviceDisplay private constructor(
             val config = VirtualDisplayConfig.Builder(name, width, height, densityDpi)
                 .setFlags(
                     VIRTUAL_DISPLAY_FLAG_PUBLIC or
+                        VIRTUAL_DISPLAY_FLAG_PRESENTATION or
                         VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY or
-                        VIRTUAL_DISPLAY_FLAG_SUPPORTS_TOUCH,
+                        VIRTUAL_DISPLAY_FLAG_SUPPORTS_TOUCH or
+                        VIRTUAL_DISPLAY_FLAG_TRUSTED,
                 )
                 .setSurface(surface)
                 .build()
             val executor = Executor { it.run() }
-            val method = device.javaClass.methods.first {
-                it.name == "createVirtualDisplay" &&
-                    it.parameterTypes.size == 3 &&
-                    it.parameterTypes[0] == VirtualDisplayConfig::class.java
-            }
+            val candidates = device.javaClass.methods.filter { it.name == "createVirtualDisplay" }
+            val method = candidates.first { it.parameterTypes.size == 3 }
             return method.invoke(device, config, executor, null) as? VirtualDisplay
                 ?: error("createVirtualDisplay returned null")
         }

@@ -65,6 +65,9 @@
          a development hook can grant it. -->
     <uses-permission android:name="android.permission.CAPTURE_VIDEO_OUTPUT"
         tools:ignore="ProtectedPermissions" />
+    <!-- Trusted virtual display + associated VirtualTouchscreen for native projected-app input. -->
+    <uses-permission android:name="android.permission.ADD_TRUSTED_DISPLAY"
+        tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.CREATE_VIRTUAL_DEVICE"
         tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.REQUEST_COMPANION_PROFILE_AUTOMOTIVE_PROJECTION"

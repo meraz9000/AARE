@@ -360,13 +360,24 @@ For Maps, the implemented shape is:
 - `app/.../host/ProjectedHost.kt` binds the service and performs the probe's sequence:
   `onSetup` (tx 1), `onProjectionStart` (tx 26) with a `DrawingSpec` whose `Surface` is the
   `SurfaceView` on AARE's car screen, `onProjectionResume` (tx 4), then an
-  `InputFocusChangedEvent` (tx 20). It supplies the minimum `CarInfo`, `CarUiInfo`,
-  `ICarDisplayManager` and `ICarDisplay` objects Maps needs before it draws, and forwards touch
-  (tx 7) and keys (tx 8).
-- `app/.../host/ProjectedAppScreen.kt` hosts that `SurfaceView` in AARE's Compose UI, with a
-  transparent `pointerInput` overlay. The SurfaceView is inside AARE's `ProjectionDisplay`
-  `VirtualDisplay`, so SurfaceFlinger composites Maps' `Presentation` with the rest of the car UI;
-  no separate `ImageReader` or encoder path is needed.
+  `InputFocusChangedEvent` (tx 20). It advertises
+  `SURFACE_CONTROL_VIEW_HOST_RENDERING` and puts the SurfaceView's
+  `InputTransferToken` in `DrawingSpec.h`; Maps then returns a
+  `SurfaceControlViewHost.SurfacePackage` in callback tx 35, which AARE embeds with
+  `SurfaceView.setChildSurfacePackage`. It also supplies the minimum `CarInfo`, `CarUiInfo`,
+  `ICarDisplayManager` and `ICarDisplay` objects Maps needs before it draws.
+- `app/.../host/ProjectedAppScreen.kt` hosts that `SurfaceView` in AARE's Compose UI. The
+  SurfaceView is clickable/focusable, requests focus, and its root touchable region is set to the
+  content size. `app/.../video/VirtualDeviceDisplay.kt` creates AARE's **trusted**
+  VirtualDevice display (with `PUBLIC|PRESENTATION|OWN_CONTENT_ONLY|SUPPORTS_TOUCH|TRUSTED`)
+  and an associated `VirtualTouchscreen`; `ProjectionDisplay.dispatchTouch` feeds car events to
+  that touchscreen on a background executor. This is what makes Maps' native map surface receive
+  real input events (synthetic `Window.injectInputEvent` and `View.dispatchTouchEvent` both
+  reached Maps but never moved its camera).
+- Creating that display needs AARE to own a CompanionDeviceManager app-streaming association
+  and the role-granted `CREATE_VIRTUAL_DEVICE`/`ADD_TRUSTED_DISPLAY` permissions. Run
+  `tools/aare-virtualdevice-setup.sh` once on the rooted phone; it is invasive and
+  phone-specific.
 - `CarPreviewActivity --es launchPackage com.google.android.apps.maps` is a deterministic
   development launcher; the normal path is the Maps tile in the app grid.
 
@@ -374,10 +385,11 @@ On the rooted Pixel this rendered the real 3D navigation map in the phone previe
 `docs/screenshots/aare-google-maps.png`) and through AARE's desktop head unit, i.e. the full AAP
 encoder/transport path (screenshot in `docs/screenshots/aare-headunit-maps.png`), with the host
 logging the full setup/resume sequence.
-Touch events reach `ProjectedHost` with the correct local coordinates. Maps also reads
-`CarUiInfo` before enabling map gestures: AARE now sets `b` (hasTouchscreen), `c` (search
-button) and `g` (capacitive) instead of reporting a car with no touchscreen. A click on the
-stock DHU map moves/selects the map, so the touch path is verified there.
+Maps reads `CarUiInfo` before enabling map gestures: AARE sets `b` (hasTouchscreen), `c`
+(search button) and `g` (capacitive) instead of reporting a car with no touchscreen. With the
+trusted virtual display + `VirtualTouchscreen` path, a drag on the AARE desktop head unit moves
+the map camera (screenshot: `docs/screenshots/aare-headunit-native-touch.png`); this is native
+single-finger input, not synthetic tx 7. Multi-touch pinch still needs a car/multi-touch test.
 
 For audio, AARE captures the car's system-audio channel as well as media and guidance, so Maps'
 tap sounds are played by the car instead of the phone speaker. For GPS, AARE feeds the car's

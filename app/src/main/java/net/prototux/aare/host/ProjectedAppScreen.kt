@@ -1,6 +1,8 @@
 package net.prototux.aare.host
 
 import android.content.Context
+import android.graphics.Region
+import android.util.Log
 import android.view.MotionEvent
 import android.view.Surface
 import android.view.SurfaceHolder
@@ -44,6 +46,7 @@ fun ProjectedAppScreen(runtime: CarRuntime, app: CarAppEntry, modifier: Modifier
     var error by remember { mutableStateOf<String?>(null) }
     var lastSurface by remember { mutableStateOf<Surface?>(null) }
     var lastSurfaceView by remember { mutableStateOf<SurfaceView?>(null) }
+    var nativeInput by remember { mutableStateOf(false) }
     var lastWidth by remember { mutableStateOf(0) }
     var lastHeight by remember { mutableStateOf(0) }
     val host = remember(app.id) {
@@ -90,6 +93,9 @@ fun ProjectedAppScreen(runtime: CarRuntime, app: CarAppEntry, modifier: Modifier
             factory = { ctx ->
                 SurfaceView(ctx).apply {
                     val surfaceView = this
+                    isClickable = true
+                    isFocusable = true
+                    requestFocus()
                     lastSurfaceView = surfaceView
                     holder.addCallback(object : SurfaceHolder.Callback {
                         override fun surfaceCreated(holder: SurfaceHolder) = Unit
@@ -100,6 +106,12 @@ fun ProjectedAppScreen(runtime: CarRuntime, app: CarAppEntry, modifier: Modifier
                             lastWidth = width
                             lastHeight = height
                             host.start(surfaceView, width, height, dpi)
+                            nativeInput = host.usesNativeInput
+                            runCatching {
+                                surfaceView.rootSurfaceControl?.setTouchableRegion(
+                                    Region(0, 0, width, height),
+                                )
+                            }.onFailure { Log.w("AareProjected", "setTouchableRegion failed", it) }
                         }
 
                         override fun surfaceDestroyed(holder: SurfaceHolder) {
@@ -110,13 +122,15 @@ fun ProjectedAppScreen(runtime: CarRuntime, app: CarAppEntry, modifier: Modifier
                 }
             },
         )
-        // AARE receives car touch synthetically (not through InputDispatcher), so the
-        // SurfaceControlViewHost child cannot receive native input. Forward raw events over
-        // tx7; the Maps hooks dispatch them into the SCVH window.
-        AndroidView(
-            modifier = Modifier.fillMaxSize(),
-            factory = { ctx -> TouchForwardView(ctx, host) },
-        )
+        // With VirtualDevice/VirtualTouchscreen (or a valid SCVH input token), Android
+        // delivers car touches directly to the embedded Maps child surface. The old
+        // synthetic overlay must stay out of the way or it blocks the main thread.
+        if (!nativeInput) {
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { ctx -> TouchForwardView(ctx, host) },
+            )
+        }
         (error ?: status)?.let { text ->
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
