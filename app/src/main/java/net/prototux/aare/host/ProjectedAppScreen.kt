@@ -43,6 +43,7 @@ fun ProjectedAppScreen(runtime: CarRuntime, app: CarAppEntry, modifier: Modifier
     var status by remember { mutableStateOf<String?>("Connecting to ${info.label}…") }
     var error by remember { mutableStateOf<String?>(null) }
     var lastSurface by remember { mutableStateOf<Surface?>(null) }
+    var lastSurfaceView by remember { mutableStateOf<SurfaceView?>(null) }
     var lastWidth by remember { mutableStateOf(0) }
     var lastHeight by remember { mutableStateOf(0) }
     val host = remember(app.id) {
@@ -88,6 +89,8 @@ fun ProjectedAppScreen(runtime: CarRuntime, app: CarAppEntry, modifier: Modifier
             modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
                 SurfaceView(ctx).apply {
+                    val surfaceView = this
+                    lastSurfaceView = surfaceView
                     holder.addCallback(object : SurfaceHolder.Callback {
                         override fun surfaceCreated(holder: SurfaceHolder) = Unit
 
@@ -96,7 +99,7 @@ fun ProjectedAppScreen(runtime: CarRuntime, app: CarAppEntry, modifier: Modifier
                             lastSurface = holder.surface
                             lastWidth = width
                             lastHeight = height
-                            host.start(holder.surface, width, height, dpi)
+                            host.start(surfaceView, width, height, dpi)
                         }
 
                         override fun surfaceDestroyed(holder: SurfaceHolder) {
@@ -107,9 +110,9 @@ fun ProjectedAppScreen(runtime: CarRuntime, app: CarAppEntry, modifier: Modifier
                 }
             },
         )
-        // A plain View overlay receives the full MotionEvent, including every pointer in a
-        // pinch, and forwards it unchanged. Compose's single-pointer detector would discard
-        // the second finger and synthesize new event timestamps.
+        // AARE receives car touch synthetically (not through InputDispatcher), so the
+        // SurfaceControlViewHost child cannot receive native input. Forward raw events over
+        // tx7; the Maps hooks dispatch them into the SCVH window.
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { ctx -> TouchForwardView(ctx, host) },
@@ -128,7 +131,9 @@ fun ProjectedAppScreen(runtime: CarRuntime, app: CarAppEntry, modifier: Modifier
                     Button(onClick = {
                         error = null
                         status = "Retrying ${info.label}…"
-                        host.start(lastSurface!!, lastWidth, lastHeight, dpi)
+                        val view = lastSurfaceView
+                        if (view != null) host.start(view, lastWidth, lastHeight, dpi)
+                        else host.start(lastSurface!!, lastWidth, lastHeight, dpi)
                     }) { Text("Retry") }
                 }
             }

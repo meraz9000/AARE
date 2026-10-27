@@ -47,14 +47,25 @@ class ProjectionDisplay(
 ) {
     private val main = Handler(Looper.getMainLooper())
     private val display: VirtualDisplay
+    private val virtualDevice: VirtualDeviceDisplay?
     private var presentation: CarPresentation? = null
 
     init {
-        val dm = context.getSystemService(DisplayManager::class.java)
-        display = dm.createVirtualDisplay(
-            "AARE car", width, height, densityDpi, surface,
-            DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION or DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY,
+        val virtual = VirtualDeviceDisplay.create(
+            context,
+            "AARE car",
+            width,
+            height,
+            densityDpi,
+            surface,
         )
+        virtualDevice = virtual
+        display = virtual?.display ?: context.getSystemService(DisplayManager::class.java)
+            .createVirtualDisplay(
+                "AARE car", width, height, densityDpi, surface,
+                DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION or
+                    DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY,
+            )
     }
 
     /** Must be called on the main thread. */
@@ -71,7 +82,8 @@ class ProjectionDisplay(
 
     fun dispatchTouch(event: MotionEvent) {
         main.post {
-            presentation?.window?.decorView?.dispatchTouchEvent(event)
+            val sent = virtualDevice?.sendTouch(event) == true
+            if (!sent) presentation?.window?.decorView?.dispatchTouchEvent(event)
             event.recycle()
         }
     }
@@ -84,7 +96,7 @@ class ProjectionDisplay(
         main.post {
             presentation?.dismissSafely()
             presentation = null
-            display.release()
+            if (virtualDevice != null) virtualDevice.release() else display.release()
         }
     }
 

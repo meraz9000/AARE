@@ -10,7 +10,8 @@ import android.view.MotionEvent
  * Turns the head unit's touch reports into Android [MotionEvent]s in projection coordinates.
  *
  * The touch panel reports in its own resolution, which covers the visible part of the video
- * (the video minus its margins); we scale and offset into the full video frame.
+ * (the video minus its margins); we scale and offset into the full video frame. Margins can be
+ * asymmetric (ui_config.margins), so each edge is carried separately.
  */
 class TouchMapper(
     private val touchWidth: Int,

@@ -19,6 +19,9 @@ import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.Surface
+import android.view.SurfaceControlViewHost
+import android.view.SurfaceView
+import android.window.InputTransferToken
 
 /**
  * Host for one legacy GMS projected-activity service (the protocol behind Google Maps' car UI).
@@ -47,6 +50,9 @@ class ProjectedHost(
     private var service: IBinder? = null
     private var connection: ServiceConnection? = null
     private var surface: Surface? = null
+    private var surfaceView: SurfaceView? = null
+    @Volatile private var inputTransferToken: InputTransferToken? = null
+    private var childPackage: SurfaceControlViewHost.SurfacePackage? = null
     private var width = 0
     private var height = 0
     private var densityDpi = 0
@@ -55,11 +61,48 @@ class ProjectedHost(
 
     private val callback = object : Binder() {
         override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
-            if (code == 23) {
-                val state = runCatching { data.readInt() }.getOrNull()
-                Log.i(TAG, "callback: connection state $state")
-            } else {
-                Log.i(TAG, "callback: transaction $code")
+            when (code) {
+                23 -> {
+                    val state = runCatching { data.readInt() }.getOrNull()
+                    Log.i(TAG, "callback: connection state $state")
+                }
+                35 -> {
+                    val debug = Parcel.obtain()
+                    runCatching {
+                        debug.appendFrom(data, 0, data.dataSize())
+                        debug.setDataPosition(0)
+                        val ints = IntArray(6) { debug.readInt() }
+                        Log.i(TAG, "callback: tx35 size=${data.dataSize()} pos=${data.dataPosition()} ints=${ints.joinToString()}")
+                    }
+                    debug.recycle()
+                    data.setDataPosition(12)
+                    val iface = runCatching { data.readString() }.getOrNull()
+                    Log.i(TAG, "callback: tx35 iface=$iface")
+                    val present = runCatching { data.readInt() }.getOrDefault(0)
+                    val extras = if (present != 0) {
+                        runCatching { data.readBundle(javaClass.classLoader) }.getOrNull()
+                    } else null
+                    val raw = extras?.get("surface_package")
+                    Log.i(
+                        TAG,
+                        "callback: tx35 present=$present keys=${extras?.keySet()} raw=${raw?.javaClass?.name}",
+                    )
+                    val pkg = extras?.getParcelable("surface_package", SurfaceControlViewHost.SurfacePackage::class.java)
+                    Log.i(TAG, "callback: tx35 pkg=${pkg != null}")
+                    Log.i(TAG, "callback: surface package ${if (pkg != null) "yes" else "missing"}")
+                    if (pkg != null) {
+                        main.post {
+                            if (surfaceView != null) {
+                                childPackage = pkg
+                                surfaceView!!.setChildSurfacePackage(pkg)
+                                status("Projecting")
+                            } else {
+                                pkg.release()
+                            }
+                        }
+                    }
+                }
+                else -> Log.i(TAG, "callback: transaction $code")
             }
             reply?.writeNoException()
             return true
@@ -142,7 +185,17 @@ class ProjectedHost(
                 55 -> {
                     runCatching { data.readString(); data.createStringArrayList() }
                     reply?.writeNoException()
-                    reply?.writeStringList(emptyList())
+                    // If we have a SurfaceView input token, advertise the modern
+                    // SurfaceControlViewHost path (feature 54): Maps then hosts its UI in our
+                    // SurfaceView and Android routes touch/pinch natively. Without a token,
+                    // stay on the legacy Presentation path and request local focus.
+                    reply?.writeStringList(
+                        if (inputTransferToken != null) {
+                            listOf("SURFACE_CONTROL_VIEW_HOST_RENDERING", "LOCAL_FOCUS_MODE")
+                        } else {
+                            listOf("LOCAL_FOCUS_MODE")
+                        }
+                    )
                 }
                 68 -> {
                     runCatching { data.readString(); data.readInt() }
@@ -163,13 +216,37 @@ class ProjectedHost(
      * resize; the old binding is torn down first.
      */
     fun start(surface: Surface, width: Int, height: Int, densityDpi: Int) {
+        startInternal(surface, width, height, densityDpi, null, null)
+    }
+
+    /**
+     * Modern projected path: Maps creates a SurfaceControlViewHost inside our SurfaceView and
+     * returns its SurfacePackage. The SurfaceView's InputTransferToken is the routing handle
+     * that makes Android deliver car touches and pinch gestures to that child surface natively.
+     */
+    fun start(view: SurfaceView, width: Int, height: Int, densityDpi: Int) {
+        val token = runCatching { view.rootSurfaceControl?.inputTransferToken }.getOrNull()
+        Log.i(TAG, "start view ${width}x${height} @${densityDpi}dpi token=${token != null}")
+        startInternal(view.holder.surface, width, height, densityDpi, token, view)
+    }
+
+    private fun startInternal(
+        surface: Surface,
+        width: Int,
+        height: Int,
+        densityDpi: Int,
+        token: InputTransferToken?,
+        view: SurfaceView?,
+    ) {
         if (this.surface === surface && this.width == width && this.height == height &&
-            this.densityDpi == densityDpi && connection != null
+            this.densityDpi == densityDpi && this.inputTransferToken == token && connection != null
         ) return
         stop()
         if (width <= 0 || height <= 0) return
-        Log.i(TAG, "start surface ${width}x${height} @${densityDpi}dpi")
+        Log.i(TAG, "start surface ${width}x${height} @${densityDpi}dpi nativeInput=${token != null}")
         this.surface = surface
+        this.surfaceView = view
+        this.inputTransferToken = token
         this.width = width
         this.height = height
         this.densityDpi = densityDpi
@@ -177,6 +254,9 @@ class ProjectedHost(
         generation++
         bind(generation)
     }
+
+    val usesNativeInput: Boolean
+        get() = inputTransferToken != null
 
     private fun bind(bindGeneration: Int) {
         status("Starting ${component.packageName}…")
@@ -236,7 +316,7 @@ class ProjectedHost(
                 data.writeInt(0) // CarDisplayId: main display
                 data.writeInt(0) // CarRegionId
                 data.writeInt(1) // DrawingSpec presence
-                writeDrawingSpec(data, width, height, densityDpi, boundSurface, Rect(0, 0, width, height), 0)
+                writeDrawingSpec(data, width, height, densityDpi, boundSurface, Rect(0, 0, width, height), 0, inputTransferToken)
                 val appIntent = Intent(Intent.ACTION_MAIN).setPackage(component.packageName)
                 val projectionConfig = Bundle().apply {
                     putBoolean("CANCEL_PENDING_LIFECYCLE_EVENTS_FOR_FINISH_ENABLED", false)
@@ -318,11 +398,18 @@ class ProjectedHost(
      */
     fun sendTouch(event: MotionEvent) {
         if (event.actionMasked == MotionEvent.ACTION_DOWN || event.actionMasked == MotionEvent.ACTION_POINTER_DOWN) {
-            Log.d(TAG, "touch pointers=${event.pointerCount} action=${event.actionMasked} x=${event.x} y=${event.y}")
+            Log.d(TAG, "touch pointers=${event.pointerCount} action=${event.actionMasked} source=${event.source} x=${event.x} y=${event.y}")
         }
-        oneWay(7) { data ->
-            data.writeInt(0)
-            event.writeToParcel(data, 0)
+        val copy = MotionEvent.obtain(event)
+        copy.source = InputDevice.SOURCE_TOUCHSCREEN
+        try {
+            oneWay(7) { data ->
+                data.writeInt(0) // CarDisplayId
+                data.writeInt(1) // MotionEvent presence
+                copy.writeToParcel(data, 0)
+            }
+        } finally {
+            copy.recycle()
         }
     }
 
@@ -338,7 +425,8 @@ class ProjectedHost(
         event.source = InputDevice.SOURCE_TOUCHSCREEN
         try {
             oneWay(7) { data ->
-                data.writeInt(0)
+                data.writeInt(0) // CarDisplayId
+                data.writeInt(1) // MotionEvent presence
                 event.writeToParcel(data, 0)
             }
         } finally {
@@ -351,7 +439,8 @@ class ProjectedHost(
         val event = KeyEvent(if (down) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP, code)
         try {
             oneWay(8) { data ->
-                data.writeInt(0)
+                data.writeInt(0) // CarDisplayId
+                data.writeInt(1) // KeyEvent presence
                 event.writeToParcel(data, 0)
             }
         } finally {
@@ -392,6 +481,10 @@ class ProjectedHost(
         connection = null
         service = null
         surface = null
+        surfaceView = null
+        inputTransferToken = null
+        childPackage?.release()
+        childPackage = null
         touchDownTime = 0L
     }
 
@@ -405,7 +498,16 @@ class ProjectedHost(
         main.post { listener.onError(message) }
     }
 
-    private fun writeDrawingSpec(parcel: Parcel, width: Int, height: Int, dpi: Int, surface: Surface, insets: Rect, displayId: Int) {
+    private fun writeDrawingSpec(
+        parcel: Parcel,
+        width: Int,
+        height: Int,
+        dpi: Int,
+        surface: Surface,
+        insets: Rect,
+        displayId: Int,
+        token: InputTransferToken?,
+    ) {
         val start = parcel.dataPosition()
         parcel.writeInt(20293 or 0xFFFF0000.toInt())
         parcel.writeInt(0)
@@ -421,6 +523,17 @@ class ProjectedHost(
         parcel.writeInt(0)
         parcel.writeInt(7 or 0x00040000)
         parcel.writeInt(displayId)
+        if (token != null) {
+            val extras = Bundle().apply { putParcelable("input_transfer_token", token) }
+            val fieldStart = parcel.dataPosition()
+            parcel.writeInt(8 or 0xFFFF0000.toInt())
+            parcel.writeInt(0)
+            extras.writeToParcel(parcel, 0)
+            val fieldEnd = parcel.dataPosition()
+            parcel.setDataPosition(fieldStart + 4)
+            parcel.writeInt(fieldEnd - (fieldStart + 8))
+            parcel.setDataPosition(fieldEnd)
+        }
         val end = parcel.dataPosition()
         parcel.setDataPosition(start + 4)
         parcel.writeInt(end - (start + 8))
