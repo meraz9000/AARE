@@ -311,7 +311,22 @@ class ProjectedHost(
 
     fun resumeProjection() = oneWay(4) { it.writeInt(0) }
 
-    /** Sends a touch to the projected app, in surface coordinates. */
+    /**
+     * Sends a complete [MotionEvent] (all pointers, real event times) to the projected app.
+     * Maps needs the pointer count to recognize pinch/zoom, and the original timestamps to
+     * distinguish a tap from a drag.
+     */
+    fun sendTouch(event: MotionEvent) {
+        if (event.actionMasked == MotionEvent.ACTION_DOWN || event.actionMasked == MotionEvent.ACTION_POINTER_DOWN) {
+            Log.d(TAG, "touch pointers=${event.pointerCount} action=${event.actionMasked} x=${event.x} y=${event.y}")
+        }
+        oneWay(7) { data ->
+            data.writeInt(0)
+            event.writeToParcel(data, 0)
+        }
+    }
+
+    /** Sends a synthetic single-pointer touch (probe/tests only). */
     fun sendTouch(action: Int, x: Float, y: Float) {
         if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_UP) {
             Log.d(TAG, "touch action=$action x=$x y=$y")

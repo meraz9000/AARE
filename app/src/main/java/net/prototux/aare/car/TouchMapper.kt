@@ -17,12 +17,14 @@ class TouchMapper(
     private val touchHeight: Int,
     private val videoWidth: Int,
     private val videoHeight: Int,
-    private val marginX: Int,
-    private val marginY: Int,
+    private val marginLeft: Int,
+    private val marginTop: Int,
+    private val marginRight: Int,
+    private val marginBottom: Int,
 ) {
     private var downTime = 0L
-    private val scaleX = (videoWidth - marginX).toFloat() / touchWidth.coerceAtLeast(1)
-    private val scaleY = (videoHeight - marginY).toFloat() / touchHeight.coerceAtLeast(1)
+    private val scaleX = (videoWidth - marginLeft - marginRight).toFloat() / touchWidth.coerceAtLeast(1)
+    private val scaleY = (videoHeight - marginTop - marginBottom).toFloat() / touchHeight.coerceAtLeast(1)
 
     fun map(e: TouchEvent): MotionEvent? {
         val n = e.pointerDataCount
@@ -47,8 +49,8 @@ class TouchMapper(
         val coords = Array(n) { i ->
             val p = e.getPointerData(i)
             MotionEvent.PointerCoords().apply {
-                x = p.x * scaleX + marginX / 2f
-                y = p.y * scaleY + marginY / 2f
+                x = p.x * scaleX + marginLeft
+                y = p.y * scaleY + marginTop
                 pressure = 1f
                 size = 1f
             }

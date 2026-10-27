@@ -1,12 +1,12 @@
 package net.prototux.aare.host
 
+import android.content.Context
 import android.view.MotionEvent
 import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.SurfaceView
+import android.view.View
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -25,7 +25,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -83,27 +82,7 @@ fun ProjectedAppScreen(runtime: CarRuntime, app: CarAppEntry, modifier: Modifier
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Black)
-            .pointerInput(host) {
-                awaitEachGesture {
-                    val down = awaitFirstDown(requireUnconsumed = false)
-                    host.sendTouch(MotionEvent.ACTION_DOWN, down.position.x, down.position.y)
-                    var sentUp = false
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                        change.consume()
-                        if (change.pressed) {
-                            host.sendTouch(MotionEvent.ACTION_MOVE, change.position.x, change.position.y)
-                        } else {
-                            host.sendTouch(MotionEvent.ACTION_UP, change.position.x, change.position.y)
-                            sentUp = true
-                            break
-                        }
-                    }
-                    if (!sentUp) host.sendTouch(MotionEvent.ACTION_CANCEL, down.position.x, down.position.y)
-                }
-            },
+            .background(Color.Black),
     ) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
@@ -128,6 +107,13 @@ fun ProjectedAppScreen(runtime: CarRuntime, app: CarAppEntry, modifier: Modifier
                 }
             },
         )
+        // A plain View overlay receives the full MotionEvent, including every pointer in a
+        // pinch, and forwards it unchanged. Compose's single-pointer detector would discard
+        // the second finger and synthesize new event timestamps.
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
+            factory = { ctx -> TouchForwardView(ctx, host) },
+        )
         (error ?: status)?.let { text ->
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -147,5 +133,19 @@ fun ProjectedAppScreen(runtime: CarRuntime, app: CarAppEntry, modifier: Modifier
                 }
             }
         }
+    }
+}
+
+
+/** Transparent touch surface that forwards raw Android events to the projected app. */
+private class TouchForwardView(context: Context, private val host: ProjectedHost) : View(context) {
+    init {
+        isClickable = true
+        isFocusable = false
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        host.sendTouch(event)
+        return true
     }
 }

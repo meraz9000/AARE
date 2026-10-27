@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
 import com.google.protobuf.ByteString
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -314,8 +315,17 @@ class CarSession(
         val dpi = if (config.density > 0) config.density else defaultDensity(minOf(w, h))
         val marginW = config.widthMargin
         val marginH = config.heightMargin
-        val insets = config.uiConfig.takeIf { config.hasUiConfig() }?.contentInsets
-        videoDescription = "${w}x$h@$fps ${dpi}dpi" + if (marginW + marginH > 0) " margins ${marginW}x$marginH" else ""
+        val ui = config.uiConfig.takeIf { config.hasUiConfig() }
+        val explicitMargins = ui?.takeIf { it.hasMargins() }?.margins
+        val insets = ui?.contentInsets
+        val explicit = explicitMargins != null
+        val padLeft = (explicitMargins?.left ?: (marginW / 2)) + (insets?.left ?: 0)
+        val padTop = (explicitMargins?.top ?: (marginH / 2)) + (insets?.top ?: 0)
+        val padRight = (explicitMargins?.right ?: (marginW - marginW / 2)) + (insets?.right ?: 0)
+        val padBottom = (explicitMargins?.bottom ?: (marginH - marginH / 2)) + (insets?.bottom ?: 0)
+        videoDescription = "${w}x$h@$fps ${dpi}dpi" +
+            if (explicitMargins != null) " margins ${explicitMargins.left},${explicitMargins.top},${explicitMargins.right},${explicitMargins.bottom}"
+            else if (marginW + marginH > 0) " margins ${marginW}x$marginH" else ""
         Log.i(TAG, "projection $videoDescription")
 
         val ch = video ?: return
@@ -343,27 +353,44 @@ class CarSession(
         enc.start()
         encoder = enc
 
-        // The visible area is the video minus its margins (split evenly), minus the UI insets.
-        val visibleW = w - marginW - (insets?.let { it.left + it.right } ?: 0)
-        val visibleH = h - marginH - (insets?.let { it.top + it.bottom } ?: 0)
+        // Margins are pixels in video coordinates. ui_config.margins is explicit per side;
+        // otherwise width_margin/height_margin are totals split evenly. Insets add on top.
+        val visibleW = w - padLeft - padRight
+        val visibleH = h - padTop - padBottom
         runtime.densityDpi = dpi
         runtime.screenWidthDp = visibleW * 160 / dpi
         runtime.screenHeightDp = visibleH * 160 / dpi
         runtime.rightHandDrive = rightHandDrive
-        val padLeft = marginW / 2 + (insets?.left ?: 0)
-        val padTop = marginH / 2 + (insets?.top ?: 0)
-        val padRight = marginW - marginW / 2 + (insets?.right ?: 0)
-        val padBottom = marginH - marginH / 2 + (insets?.bottom ?: 0)
+        Log.i(
+            TAG,
+            "ui visible=${visibleW}x$visibleH dp=${runtime.screenWidthDp}x${runtime.screenHeightDp} " +
+                "pad=${padLeft},${padTop},${padRight},${padBottom} explicit=$explicit " +
+                "insets=${insets?.left},${insets?.top},${insets?.right},${insets?.bottom}",
+        )
         display = ProjectionDisplay(context, w, h, dpi, enc.inputSurface) {
-            val d = LocalDensity.current
+            val density = LocalDensity.current.density
             Box(Modifier.fillMaxSize().background(Color.Black)) {
-                with(d) {
-                    runtime.Root(Modifier.padding(start = padLeft.toDp(), top = padTop.toDp(), end = padRight.toDp(), bottom = padBottom.toDp()))
-                }
+                runtime.Root(
+                    Modifier.padding(
+                        start = (padLeft / density).dp,
+                        top = (padTop / density).dp,
+                        end = (padRight / density).dp,
+                        bottom = (padBottom / density).dp,
+                    ),
+                )
             }
         }.also { it.show() }
         val inputCh = touchSize
-        touch = TouchMapper(inputCh?.first ?: (w - marginW), inputCh?.second ?: (h - marginH), w, h, marginW, marginH)
+        touch = TouchMapper(
+            inputCh?.first ?: visibleW,
+            inputCh?.second ?: visibleH,
+            w,
+            h,
+            padLeft,
+            padTop,
+            padRight,
+            padBottom,
+        )
     }
 
     private fun teardownVideo() {
