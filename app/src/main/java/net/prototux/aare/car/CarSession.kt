@@ -460,7 +460,9 @@ class CarSession(
     private val audioListener = object : AudioChannel.Listener {
         override fun onAudioReady(channel: AudioChannel, config: aap_protobuf.service.media.shared.message.AudioConfigurationOuterClass.AudioConfiguration) {
             if (!settings.carAudio) return
-            if (channel.streamType != AudioStreamType.AUDIO_STREAM_MEDIA && channel.streamType != AudioStreamType.AUDIO_STREAM_GUIDANCE) return
+            if (channel.streamType != AudioStreamType.AUDIO_STREAM_MEDIA &&
+                channel.streamType != AudioStreamType.AUDIO_STREAM_GUIDANCE &&
+                channel.streamType != AudioStreamType.AUDIO_STREAM_SYSTEM_AUDIO) return
             main.post { startAudio(channel) }
         }
         override fun onUnderflow(channel: AudioChannel) { audioOuts[channel.streamType]?.onUnderflow() }
@@ -479,23 +481,26 @@ class CarSession(
     private fun startAudio(channel: AudioChannel) {
         val cfg = channel.config ?: return
         val guidance = channel.streamType == AudioStreamType.AUDIO_STREAM_GUIDANCE
+        val system = channel.streamType == AudioStreamType.AUDIO_STREAM_SYSTEM_AUDIO
         val p = projection()
         val method = CaptureMethods.best(context, p, failedCapture)
         val rate = cfg.samplingRate
         val ch = cfg.numberOfChannels
+        if (system && method != CaptureMethod.AUDIO_POLICY) return
         val source: PcmSource = when (method) {
             CaptureMethod.AUDIO_POLICY -> {
                 // Without a guidance channel in the car, navigation voice goes with the music.
                 val hasGuidance = audio.any { it.streamType == AudioStreamType.AUDIO_STREAM_GUIDANCE }
                 val usages = when {
+                    system -> CaptureMethods.SYSTEM_USAGES
                     guidance -> CaptureMethods.GUIDANCE_USAGES
                     hasGuidance -> CaptureMethods.MEDIA_USAGES
                     else -> CaptureMethods.MEDIA_USAGES + CaptureMethods.GUIDANCE_USAGES
                 }
                 AudioPolicySource(context, usages, rate, ch)
             }
-            CaptureMethod.SHIZUKU -> if (guidance) return else ShizukuSource(context, rate, ch)
-            CaptureMethod.PLAYBACK_CAPTURE -> if (guidance || p == null) return else PlaybackCaptureSource(p, rate, ch)
+            CaptureMethod.SHIZUKU -> if (guidance || system) return else ShizukuSource(context, rate, ch)
+            CaptureMethod.PLAYBACK_CAPTURE -> if (guidance || system || p == null) return else PlaybackCaptureSource(p, rate, ch)
             null -> {
                 if (!guidance) runtime.notice("Car audio", "Open AARE on the phone and set up car audio to hear the phone in the car")
                 return
@@ -503,7 +508,12 @@ class CarSession(
         }
         if (!guidance) DiagLog.add("car audio: ${method.label}")
         audioOuts.remove(channel.streamType)?.stop()
-        audioOuts[channel.streamType] = CarAudioOut(source, channel, if (guidance) guidanceFocus else mediaFocusRequests, onFailed = {
+        val focus = when {
+            system -> systemFocus
+            guidance -> guidanceFocus
+            else -> mediaFocusRequests
+        }
+        audioOuts[channel.streamType] = CarAudioOut(source, channel, focus, onFailed = {
             main.post {
                 DiagLog.add("car audio: ${method.label} failed, trying the next method")
                 failedCapture += method
@@ -520,6 +530,12 @@ class CarSession(
             else if (!guidancePlaying) aap.requestAudioFocus(AudioFocusRequestType.AUDIO_FOCUS_RELEASE)
         }
         override val granted: Boolean get() = mediaFocus
+    }
+
+    /** Car UI/system sounds: the car's system-audio channel is already ours; don't ask for media focus. */
+    private val systemFocus = object : CarAudioOut.Focus {
+        override fun request(playing: Boolean) = Unit
+        override val granted: Boolean get() = true
     }
 
     /** Navigation voice: transient focus that ducks the car's other sound, then back to the music if it plays. */

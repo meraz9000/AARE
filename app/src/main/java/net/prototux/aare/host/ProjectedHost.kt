@@ -168,6 +168,7 @@ class ProjectedHost(
         ) return
         stop()
         if (width <= 0 || height <= 0) return
+        Log.i(TAG, "start surface ${width}x${height} @${densityDpi}dpi")
         this.surface = surface
         this.width = width
         this.height = height
@@ -230,6 +231,7 @@ class ProjectedHost(
         Thread.sleep(300)
         if (setupGeneration != generation || surface !== boundSurface || service == null) return
 
+        Log.i(TAG, "onProjectionStart surface ${width}x${height} @${densityDpi}dpi")
         if (!call(binder, "onProjectionStart", 26) { data ->
                 data.writeInt(0) // CarDisplayId: main display
                 data.writeInt(0) // CarRegionId
@@ -475,7 +477,15 @@ class ProjectedHost(
         for (id in 1..10) {
             if (id == 5) continue
             parcel.writeInt(id or 0x00040000)
-            parcel.writeInt(0)
+            // 1 rotary, 2 touchscreen, 3 search button, 4 touchpad for UI navigation,
+            // 6 D-pad, 7 touchscreen type, 8 absolute touchpad, 9/10 touchpad thresholds.
+            parcel.writeInt(
+                when (id) {
+                    2, 3 -> 1  // has a touchscreen and a search button
+                    7 -> 1     // capacitive touchscreen
+                    else -> 0
+                },
+            )
         }
         val end = parcel.dataPosition()
         parcel.setDataPosition(start + 4)

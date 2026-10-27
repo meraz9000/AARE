@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import android.hardware.usb.UsbManager
 import android.os.Bundle
+import android.util.Log
 import androidx.core.content.IntentCompat
 import net.prototux.aare.service.ProjectionService
 
@@ -26,7 +27,12 @@ class UsbAccessoryActivity : Activity() {
     }
 
     private fun forward(intent: Intent?) {
-        val accessory = intent?.let { IntentCompat.getParcelableExtra(it, UsbManager.EXTRA_ACCESSORY, android.hardware.usb.UsbAccessory::class.java) } ?: return
+        val accessory = intent?.let { IntentCompat.getParcelableExtra(it, UsbManager.EXTRA_ACCESSORY, android.hardware.usb.UsbAccessory::class.java) }
+        if (accessory == null) {
+            Log.w("AareUsb", "attach without accessory: ${intent?.action} extras=${intent?.extras?.keySet()}")
+            return
+        }
+        Log.i("AareUsb", "attach: ${accessory.manufacturer}/${accessory.model} v${accessory.version}")
         ProjectionService.startUsb(this, accessory)
     }
 }

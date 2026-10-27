@@ -47,6 +47,8 @@ object CaptureMethods {
     /** Usages of the car's media channel and of its guidance channel, as Android Auto splits them. */
     val MEDIA_USAGES = intArrayOf(AudioAttributes.USAGE_MEDIA, AudioAttributes.USAGE_GAME, AudioAttributes.USAGE_UNKNOWN)
     val GUIDANCE_USAGES = intArrayOf(AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE, AudioAttributes.USAGE_ASSISTANT)
+    /** Car UI clicks/touch sounds. Without this, they stay on the phone speaker while media goes to the car. */
+    val SYSTEM_USAGES = intArrayOf(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
 
     fun audioPolicyAvailable(context: Context): Boolean =
         context.checkSelfPermission("android.permission.MODIFY_AUDIO_ROUTING") == PackageManager.PERMISSION_GRANTED

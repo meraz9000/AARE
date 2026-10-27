@@ -150,8 +150,13 @@ refused. On a rooted phone, install the [AARE Projection Hooks](tools/aare-hooks
 alternative (see
 [docs/research/gearhead-projected-activity.md](docs/research/gearhead-projected-activity.md)).
 The map display is proven in the phone preview and through AARE's desktop head unit (the full
-AAP path, not just Compose); touch and key forwarding are wired, but map gestures still need
-testing in a car. Waze declares the public Car App Library, not `ICarProjection`; its
+AAP path, not just Compose); touch is wired and verified in the desktop head unit, but the
+real-car path still needs testing. AARE reports a touchscreen in `CarUiInfo` (without that
+Maps disables map gestures), routes Maps' system/tap sounds through the car's system-audio
+channel, and feeds the car's GPS into Android's mock location while "Use car GPS" is enabled.
+For car GPS, allow AARE as a mock-location app (on a rooted test phone:
+`adb shell su -c 'appops set net.prototux.aare android:mock_location allow'`). Waze declares
+the public Car App Library, not `ICarProjection`; its
 `HostValidator` rejects AARE's signing certificate. The same on-device hooks module (or the
 test-only Frida hook) makes Waze accept AARE and reaches Waze's own one-time setup screen, but
 Waze still has to be set up and signed in on the phone before its navigation screen can render.
@@ -161,6 +166,8 @@ separate from the Maps protocol.
 ![Google Maps' navigation UI inside AARE's car screen, with the AARE rail on the left](docs/screenshots/aare-google-maps.png)
 
 ![Google Maps rendered through AARE's desktop head unit](docs/screenshots/aare-headunit-maps.png)
+
+![Google Maps following the car's GPS in AARE's desktop head unit, with the car chevron in Paris](docs/screenshots/aare-headunit-maps-paris.png)
 
 ![Google Maps hosted inside AARE by the on-device hooks module, with no Frida running](docs/screenshots/aare-lsposed-maps.png)
 

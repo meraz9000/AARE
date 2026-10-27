@@ -187,9 +187,11 @@ class ProjectionService : Service() {
 
     private fun openUsb(accessory: UsbAccessory) {
         usbAccessory = accessory
+        log("USB: opening ${accessory.manufacturer}/${accessory.model}")
         val usb = getSystemService(UsbManager::class.java)
         val transport = runCatching { UsbAccessoryTransport(usb, accessory) }
             .onFailure { log("USB: ${it.message}") }.getOrNull() ?: return
+        log("USB: opened ${transport.name}")
         startSession(transport, wireless = false, peerKey = usbPeerKey(accessory), trustOnFirstUse = false)
     }
 

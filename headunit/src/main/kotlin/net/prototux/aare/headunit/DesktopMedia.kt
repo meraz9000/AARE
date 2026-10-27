@@ -111,6 +111,7 @@ class AudioOutputs {
         stop(stream)
         runCatching { players[stream] = Player(stream, cfg) }
             .onFailure { System.err.println("audio: can't open $stream: ${it.message}") }
+        println("audio: $stream ${cfg.samplingRate}Hz x${cfg.numberOfChannels}")
     }
 
     /** Called on the protocol thread: only queues. */

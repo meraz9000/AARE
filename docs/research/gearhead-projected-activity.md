@@ -374,8 +374,16 @@ On the rooted Pixel this rendered the real 3D navigation map in the phone previe
 `docs/screenshots/aare-google-maps.png`) and through AARE's desktop head unit, i.e. the full AAP
 encoder/transport path (screenshot in `docs/screenshots/aare-headunit-maps.png`), with the host
 logging the full setup/resume sequence.
-Touch events reach `ProjectedHost` with the correct local coordinates; whether Maps pans while
-it is following a route is still being checked. The permission gate is unchanged: AARE itself
+Touch events reach `ProjectedHost` with the correct local coordinates. Maps also reads
+`CarUiInfo` before enabling map gestures: AARE now sets `b` (hasTouchscreen), `c` (search
+button) and `g` (capacitive) instead of reporting a car with no touchscreen. A click on the
+stock DHU map moves/selects the map, so the touch path is verified there.
+
+For audio, AARE captures the car's system-audio channel as well as media and guidance, so Maps'
+tap sounds are played by the car instead of the phone speaker. For GPS, AARE feeds the car's
+position into Android's mock location providers; the test phone must allow AARE as a mock
+location app (`appops set net.prototux.aare android:mock_location allow`), otherwise the
+projected map opens at its last camera position. The permission gate is unchanged: AARE itself
 cannot hold `CAPTURE_VIDEO_OUTPUT` on a stock install. The on-device
 [AARE Projection Hooks](../../tools/aare-hooks/README.md) Vector/LSPosed module now grants the
 check only to AARE's UID; the Frida harness in `tools/gearhead-projection-probe/frida/` remains

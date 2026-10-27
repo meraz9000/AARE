@@ -72,12 +72,14 @@ class CarAudioOut(
             onFailed()
             return
         }
+        Log.i(TAG, "started ${channel.streamType} ${rate}Hz x$channels")
         // ~20 ms chunks: small enough for low latency, big enough to keep the message rate sane.
         val chunk = rate / 50 * channels * 2
         val buf = ByteArray(10 + chunk)
         var lastSound = 0L
         playing = false
         var frames = 0L
+        var announcedSound = false
         // Chunks (with their timestamp) waiting for focus or for room in the car's ack window.
         val queued = ArrayDeque<Pair<ByteArray, Long>>()
         fun queue(ts: Long) {
@@ -94,7 +96,13 @@ class CarAudioOut(
                 }
                 if (got < chunk) continue
                 val now = SystemClock.elapsedRealtime()
-                if (!isSilent(buf, 10, chunk)) lastSound = now
+                if (!isSilent(buf, 10, chunk)) {
+                    lastSound = now
+                    if (!announcedSound) {
+                        announcedSound = true
+                        Log.i(TAG, "first sound on ${channel.streamType}")
+                    }
+                }
                 val ts = frames * 1_000_000L / rate
                 frames += chunk / (2 * channels)
                 if (!playing && lastSound == now) {
