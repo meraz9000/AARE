@@ -37,7 +37,7 @@ It needs no Google Play Services.
 | Sensors: driving restrictions, night mode, car GPS and compass (passed to nav apps) | done |
 | Every other sensor the car offers (RPM, odometer, fuel and range, temperature, HVAC, doors, lights, tyres, accelerometer, gyroscope…) for car apps (car hardware API) and the assistant | new, tested only with the desktop head unit's fake car |
 | Car App Library host: handshake, templates, map surface, navigation trips, alerts, car hardware, microphone | done |
-| Google Maps' private projected activity (experimental): bind, `DrawingSpec` surface, native touch, resume/key forwarding | display and native single-finger touch proven in AARE's desktop head unit and on-device via the Vector/LSPosed module; pinch and real-car touch still need testing |
+| Google Maps' private projected activity (experimental): bind, `DrawingSpec` surface, native touch, resume/key forwarding | display and native touch proven in AARE's desktop head unit and in a real Kia EV6; tap, panning and two-finger pinch-to-zoom work on the car's touch screen |
 | Waze's public Car App Library service (experimental): HostValidator test hook | reaches Waze's one-time setup screen; full navigation untested |
 | Template rendering (list, grid, pane, message, search, sign-in, tabs, navigation, map...) | done |
 | Media apps: browse, search, now playing, transport, active session tracking | done |
@@ -112,6 +112,9 @@ an uninstall first.
 4. To try it without a car, tap **Preview car screen**: it shows the car UI on the phone with the
    same apps, or use the desktop head unit below.
 
+If the car crops the edges of AARE's picture, set **Connection > Video > Screen edge margin**
+to add a black border and shrink the car UI until everything is visible. Reconnect after changing it.
+
 The bar is laid out like Android Auto's: on a side next to the driver, or along the bottom
 (*Car screen* in the settings). It holds:
 
@@ -149,11 +152,11 @@ refused. On a rooted phone, install the [AARE Projection Hooks](tools/aare-hooks
 (Vector/LSPosed) to grant that signature check only to AARE; Frida remains the development
 alternative (see
 [docs/research/gearhead-projected-activity.md](docs/research/gearhead-projected-activity.md)).
-The map display and native single-finger touch are proven through AARE's desktop head unit (the
-full AAP path, not just Compose). Touch uses an AARE-owned trusted virtual display with an
-associated `VirtualTouchscreen`, so Maps receives real InputDispatcher events rather than
-synthetic `View.dispatchTouchEvent` calls. Pinch and the real-car path still need testing; the
-setup is invasive and requires the rooted-device steps in
+The map display and native touch are proven through AARE's desktop head unit (the full AAP path,
+not just Compose) and in a real Kia EV6. Tap, panning and two-finger pinch-to-zoom work on the
+car's touch screen. Touch uses an AARE-owned trusted virtual display with an associated
+`VirtualTouchscreen`, so Maps receives real InputDispatcher events rather than synthetic
+`View.dispatchTouchEvent` calls. The setup is invasive and requires the rooted-device steps in
 `tools/aare-virtualdevice-setup.sh`. AARE reports a touchscreen in `CarUiInfo` (without that
 Maps disables map gestures), routes Maps' system/tap sounds through the car's system-audio
 channel, and feeds the car's GPS into Android's mock location while "Use car GPS" is enabled.
@@ -174,8 +177,8 @@ trusted virtual display and an associated `VirtualTouchscreen`. On the rooted Pi
 `tools/aare-virtualdevice-setup.sh` once, then install the hooks module as above. This creates a
 CompanionDeviceManager app-streaming association and grants the role-managed
 `CREATE_VIRTUAL_DEVICE`/`ADD_TRUSTED_DISPLAY` permissions. It is invasive and device-specific;
-without it AARE falls back to the legacy surface path and Maps touch will not work. Pinch is
-still awaiting a real car/multi-touch test.
+without it AARE falls back to the legacy surface path and Maps touch will not work. Single-finger
+touch and two-finger pinch-to-zoom have both been verified on a real Kia EV6.
 
 ![Google Maps' navigation UI inside AARE's car screen, with the AARE rail on the left](docs/screenshots/aare-google-maps.png)
 
@@ -399,8 +402,9 @@ Other tools:
 
 | Head unit | Phone | Link | Result |
 |---|---|---|---|
-| ZLink 3 aftermarket unit, model K2001N (Allwinner T3, Android 7, sold as Android 12), in a VW Golf 6 | Pixel 10 Pro XL, Android 17 | Wireless | Works: full sessions with video, with AARE's own certificate. On Android 17 it needs the local network permission ([#22](https://github.com/prototux/AARE/pull/22)). Known issue: the unit asks for 1280x720 at 160 dpi with 256x120 margins, and the screen edges are cut off. |
+| ZLink 3 aftermarket unit, model K2001N (Allwinner T3, Android 7, sold as Android 12), in a VW Golf 6 | Pixel 10 Pro XL, Android 17 | Wireless | Works: full sessions with video, with AARE's own certificate. On Android 17 it needs the local network permission ([#22](https://github.com/prototux/AARE/pull/22)). Known issue: the unit asks for 1280x720 at 160 dpi with 256x120 margins, and the screen edges are cut off; use **Connection > Video > Screen edge margin** to inset the UI. |
 | Denso Ten E-DA2, the factory unit of a 2026 Toyota Land Cruiser 79 series (wired Android Auto only) | Samsung Galaxy S23 (SM-S911B), Android 16, not rooted | USB | Works, all features tried ([#37](https://github.com/prototux/AARE/issues/37)), with AARE's own self-signed certificate. The unit also plays the phone's Bluetooth audio during Android Auto, so the car audio setup isn't needed. |
+| Kia EV6 factory head unit | Pixel 10 Pro XL, Android 17, rooted | USB | Works with the imported phone certificate and the rooted VirtualDevice setup: Maps projection, tap, panning, two-finger pinch-to-zoom, audio and car GPS. |
 
 If you try AARE on another head unit, please open an issue or a pull request to add it here,
 whether it worked or not.

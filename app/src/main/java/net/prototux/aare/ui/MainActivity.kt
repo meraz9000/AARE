@@ -70,6 +70,7 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -94,6 +95,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -369,6 +371,7 @@ private fun ConnectionSettings(settings: Settings) {
     var wireless by remember { mutableStateOf(settings.wireless) }
     var fps60 by remember { mutableStateOf(settings.prefer60fps) }
     var maxH by remember { mutableIntStateOf(settings.maxVideoHeight) }
+    var uiInset by remember { mutableIntStateOf(settings.carUiInsetPercent) }
     var resume by remember { mutableStateOf(settings.resumeMedia) }
     var cars by remember { mutableStateOf(settings.knownCars) }
     var carGps by remember { mutableStateOf(settings.carGpsForPhone) }
@@ -396,6 +399,16 @@ private fun ConnectionSettings(settings: Settings) {
                 maxH = it.toInt(); settings.maxVideoHeight = maxH
             }
             Text("Lower uses less battery and bandwidth.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(8.dp))
+            Text("Screen edge margin: $uiInset%", style = MaterialTheme.typography.bodyLarge)
+            Slider(
+                value = uiInset.toFloat(),
+                onValueChange = { uiInset = it.roundToInt(); settings.carUiInsetPercent = uiInset },
+                valueRange = 0f..15f,
+                steps = 14,
+            )
+            Text("Adds a black border around the car UI for head units that crop the picture. Reconnect after changing it.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Section("Your cars") {
             if (cars.isEmpty()) Text("Cars appear here after the first connection.", style = MaterialTheme.typography.bodyMedium)

@@ -319,10 +319,13 @@ class CarSession(
         val explicitMargins = ui?.takeIf { it.hasMargins() }?.margins
         val insets = ui?.contentInsets
         val explicit = explicitMargins != null
-        val padLeft = (explicitMargins?.left ?: (marginW / 2)) + (insets?.left ?: 0)
-        val padTop = (explicitMargins?.top ?: (marginH / 2)) + (insets?.top ?: 0)
-        val padRight = (explicitMargins?.right ?: (marginW - marginW / 2)) + (insets?.right ?: 0)
-        val padBottom = (explicitMargins?.bottom ?: (marginH - marginH / 2)) + (insets?.bottom ?: 0)
+        // User setting for head units that crop the picture (overscan). It is a uniform black
+        // border, so the car UI can be made smaller until all edges are visible.
+        val safeInset = minOf(w, h) * settings.carUiInsetPercent / 100
+        val padLeft = (explicitMargins?.left ?: (marginW / 2)) + (insets?.left ?: 0) + safeInset
+        val padTop = (explicitMargins?.top ?: (marginH / 2)) + (insets?.top ?: 0) + safeInset
+        val padRight = (explicitMargins?.right ?: (marginW - marginW / 2)) + (insets?.right ?: 0) + safeInset
+        val padBottom = (explicitMargins?.bottom ?: (marginH - marginH / 2)) + (insets?.bottom ?: 0) + safeInset
         videoDescription = "${w}x$h@$fps ${dpi}dpi" +
             if (explicitMargins != null) " margins ${explicitMargins.left},${explicitMargins.top},${explicitMargins.right},${explicitMargins.bottom}"
             else if (marginW + marginH > 0) " margins ${marginW}x$marginH" else ""

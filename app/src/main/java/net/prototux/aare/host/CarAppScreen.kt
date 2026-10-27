@@ -2,6 +2,9 @@ package net.prototux.aare.host
 
 import android.graphics.Bitmap
 import android.graphics.Rect
+import android.view.GestureDetector
+import android.view.MotionEvent
+import android.view.ScaleGestureDetector
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import androidx.car.app.model.Alert
@@ -198,6 +201,35 @@ private class ConnectionTemplateHost(val conn: CarAppConnection, val runtime: Ca
                         }
                         override fun surfaceDestroyed(holder: SurfaceHolder) = conn.surfaceDestroyed(owner)
                     })
+                    // Nuvio Cast draws into its own SurfaceView, which sits above Compose's map
+                    // gesture layer. Forward its touches straight to its SurfaceCallback.
+                    if (conn.info.packageName == "dev.lab.ytcar") {
+                        val scale = ScaleGestureDetector(ctx, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                            override fun onScale(detector: ScaleGestureDetector): Boolean {
+                                conn.scale(detector.focusX, detector.focusY, detector.scaleFactor)
+                                return true
+                            }
+                        })
+                        val gestures = GestureDetector(ctx, object : GestureDetector.SimpleOnGestureListener() {
+                            override fun onDown(e: MotionEvent) = true
+                            override fun onSingleTapUp(e: MotionEvent): Boolean {
+                                conn.click(e.x, e.y); return true
+                            }
+                            override fun onScroll(e1: MotionEvent?, e2: MotionEvent, dx: Float, dy: Float): Boolean {
+                                if (!scale.isInProgress) conn.scroll(-dx, -dy)
+                                return true
+                            }
+                            override fun onFling(e1: MotionEvent?, e2: MotionEvent, vx: Float, vy: Float): Boolean {
+                                if (!scale.isInProgress) conn.fling(vx, vy)
+                                return true
+                            }
+                        })
+                        setOnTouchListener { _, event ->
+                            scale.onTouchEvent(event)
+                            if (!scale.isInProgress) gestures.onTouchEvent(event)
+                            true
+                        }
+                    }
                 }
             },
         )

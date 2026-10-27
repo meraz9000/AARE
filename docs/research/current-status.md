@@ -36,17 +36,19 @@ are in [`gearhead-notes.md`](gearhead-notes.md).
 - **Retry after Maps dies does nothing** (`ProjectedHost.startInternal()` early return; the old
   connection is not cleared). Leave the Maps screen and reopen it instead.
 
-- **Pinch-to-zoom** is not verified. The DHU is single-pointer. A two-finger `sendevent` test
-  was attempted against `/dev/input/event3` (`AARE-TOUCHSCREEN:26`) but the shell script was
-  denied access to the event node; use an in-app injector or a multi-touch-capable car/DHU.
-- **Cut-off / overscan on the car screen** is not verified. `CarSession` now honors explicit
-  per-side `ui_config.margins` and converts pixels to dp correctly. If the car sends zero
-  margins but still crops, a user-configurable safe area is still needed.
-- **Real Kia EV6 test** is pending. The stock Google DHU and AARE's own DHU are the only full-AAP
-  paths tested. The car needs AARE's imported phone certificate (the local `gearhead2` import)
-  and the VirtualDevice setup below.
-- **Nuvio Cast surface touch** was not made to work. Its Car App Library `onClick` injection path
-  never received taps in AARE's surface host.
+- **Pinch-to-zoom** is verified in a real Kia EV6: two-finger zoom in and out works on the car's
+  touch screen, as do tap and panning. The desktop head unit remains single-pointer, so the car
+  is the reference test.
+- **Cut-off / overscan on the car screen** was not specifically assessed in the Kia test.
+  `CarSession` honors explicit per-side `ui_config.margins` and converts pixels to dp correctly.
+  A user-configurable **Connection > Video > Screen edge margin** now adds a uniform black border
+  when the car crops despite zero margins; it still needs a real-car verification.
+- **Real Kia EV6 test** is complete: Maps projection, tap, panning, two-finger pinch-to-zoom,
+  audio and car GPS work. The car uses AARE's imported phone certificate (the local `gearhead2`
+  import) and the VirtualDevice setup below.
+- **Nuvio Cast surface touch** now has a targeted forwarding path: AARE attaches a gesture
+  listener to `dev.lab.ytcar`'s `SurfaceView` and sends tap/scroll/fling/scale to its
+  `SurfaceCallback`. It builds, but still needs an on-device test; Nuvio's own `onScale` only logs.
 - **Waze** reaches its one-time setup screen with the HostValidator hook; full navigation needs
   Waze signed in on the phone. This is separate from the Maps private API.
 - The current code has test-only infrastructure: a trusted VirtualDevice display, a Companion

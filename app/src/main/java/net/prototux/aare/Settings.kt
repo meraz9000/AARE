@@ -44,6 +44,14 @@ class Settings(context: Context) {
         get() = prefs.getBoolean("prefer_60fps", true)
         set(v) = prefs.edit { putBoolean("prefer_60fps", v) }
 
+    /**
+     * Extra black border around the car UI, in percent of the shorter video side. Some head units
+     * crop the picture (overscan); this lets the user shrink the UI until the edges are visible.
+     */
+    var carUiInsetPercent: Int
+        get() = prefs.getInt("car_ui_inset_percent", 0).coerceIn(0, 15)
+        set(v) = prefs.edit { putInt("car_ui_inset_percent", v.coerceIn(0, 15)) }
+
     /** Where the car screen's bar goes: next to the driver ([RAIL_AUTO]), [RAIL_LEFT], [RAIL_RIGHT] or [RAIL_BOTTOM]. */
     var railPosition: String
         get() = prefs.getString("rail_position", null)
