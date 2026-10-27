@@ -1,6 +1,6 @@
 # Current status — projected Google Maps in AARE
 
-Last updated: 2026-10-27 on branch `experiment/scvh-touch`.
+Last updated: 2026-10-27 (afternoon) on branch `experiment/scvh-touch`.
 
 This file is the hand-off note for a reviewer. It describes what was built, what is proven, and
 what is still open. The detailed protocol reverse-engineering is in
@@ -18,15 +18,23 @@ are in [`gearhead-notes.md`](gearhead-notes.md).
   - It puts the AARE `SurfaceView`'s `InputTransferToken` in `DrawingSpec.h`.
   - Maps returns a `SurfacePackage` in callback tx 35; AARE embeds it with
     `SurfaceView.setChildSurfacePackage()`.
-- Native single-finger touch works through an AARE-owned trusted **VirtualDevice** display and
-  an associated **VirtualTouchscreen**. Car/DHU touch is sent as `VirtualTouchEvent`s on a
-  background executor. A DHU drag moved the Maps camera (proof screenshots
-  `docs/screenshots/aare-headunit-native-touch.png`, and user captures from the test session).
+- Car touch reaches Maps natively through an AARE-owned trusted **VirtualDevice** display and
+  an associated **VirtualTouchscreen** (`VirtualTouchEvent`s on a background executor). Since
+  `f45dbcd` the SurfaceView is raised above AARE's window once Maps attaches, so InputDispatcher
+  delivers the touches to Maps' embedded window. Maps recognizes taps and drags, **but does not
+  pan the map** (see below and [`maps-touch-investigation.md`](maps-touch-investigation.md)).
 - The on-device Vector/LSPosed module grants `CAPTURE_VIDEO_OUTPUT` only to AARE's UID in the
   Maps process, and bypasses Waze's `HostValidator` only for AARE's package. No Frida is needed
   after the module is installed.
 
 ## What is not proven / known open issues
+
+- **Maps drag-to-pan does not work.** Touches reach Maps' map view with correct coordinates and
+  its gesture detector reports the scroll, but Maps never queues a camera move, and it makes no
+  ICar calls during the drag. The earlier "DHU drag moved the camera" claim was not supported by
+  its screenshot. Full findings: [`maps-touch-investigation.md`](maps-touch-investigation.md).
+- **Retry after Maps dies does nothing** (`ProjectedHost.startInternal()` early return; the old
+  connection is not cleared). Leave the Maps screen and reopen it instead.
 
 - **Pinch-to-zoom** is not verified. The DHU is single-pointer. A two-finger `sendevent` test
   was attempted against `/dev/input/event3` (`AARE-TOUCHSCREEN:26`) but the shell script was
@@ -72,8 +80,10 @@ AARE UID 10360; Maps UID 10246.
    adb forward tcp:5277 localabstract:aare_hu
    # start Google's stock DHU, or AARE's ./headunit.sh
    ```
-4. Open the Maps tile (or use `--es launchPackage`) and check that Maps renders. Touch should
-   arrive through the VirtualTouchscreen.
+4. Open the Maps tile (or use `--es launchPackage`) and check that Maps renders. Touch arrives
+   through the VirtualTouchscreen; `adb shell dumpsys input` should list
+   `Embedded{-net.prototux.aare}` under `TouchedWindows` for the car display while a finger is
+   down. Debug log tags: `AareICarTrace`, `AareHooksTouch`, `AareProjected`.
 
 ## Key source files
 
@@ -107,6 +117,8 @@ this branch is intentionally WIP until the car test and pinch validation are com
 
 ## Immediate next steps
 
+0. Decide whether to keep pursuing Maps panning (Maps-internal) or rely on Car App Library
+   navigation apps such as Waze for touch-driven maps. Fix the Retry bug either way.
 1. Verify pinch with a two-pointer injector/car and confirm the map zooms.
 2. Verify margins/cut-off on the EV6 and add a safe-area setting if needed.
 3. Clean any remaining debug logging, run `./gradlew :app:assembleDebug :app:testDebugUnitTest`,

@@ -387,9 +387,11 @@ encoder/transport path (screenshot in `docs/screenshots/aare-headunit-maps.png`)
 logging the full setup/resume sequence.
 Maps reads `CarUiInfo` before enabling map gestures: AARE sets `b` (hasTouchscreen), `c`
 (search button) and `g` (capacitive) instead of reporting a car with no touchscreen. With the
-trusted virtual display + `VirtualTouchscreen` path, a drag on the AARE desktop head unit moves
-the map camera (screenshot: `docs/screenshots/aare-headunit-native-touch.png`); this is native
-single-finger input, not synthetic tx 7. Multi-touch pinch still needs a car/multi-touch test.
+trusted virtual display + `VirtualTouchscreen` path, native single-finger touch reaches Maps'
+map view and its gesture detector recognizes drags, but Maps does not pan the camera. (An earlier
+version of this note said a drag moved the camera; the screenshot cited,
+`docs/screenshots/aare-headunit-native-touch.png`, only shows Maps' default camera position.) See
+[`maps-touch-investigation.md`](maps-touch-investigation.md). Multi-touch pinch is untested.
 
 For audio, AARE captures the car's system-audio channel as well as media and guidance, so Maps'
 tap sounds are played by the car instead of the phone speaker. For GPS, AARE feeds the car's
