@@ -89,9 +89,17 @@ public final class HookEntry implements IXposedHookLoadPackage {
             XposedHelpers.findAndHookMethod(validator, "isValidHost", hostInfo, new XC_MethodHook() {
                 @Override
                 protected void beforeHookedMethod(MethodHookParam param) {
-                    param.setResult(true);
-                    if (WAKE_LOGGED.compareAndSet(false, true)) {
-                        XposedBridge.log("AARE hooks: Waze HostValidator allows AARE");
+                    if (param.args == null || param.args.length == 0 || param.args[0] == null) return;
+                    try {
+                        Object host = param.args[0];
+                        Object name = XposedHelpers.callMethod(host, "getPackageName");
+                        if (!AARE.equals(name)) return;
+                        param.setResult(true);
+                        if (WAKE_LOGGED.compareAndSet(false, true)) {
+                            XposedBridge.log("AARE hooks: Waze HostValidator allows AARE");
+                        }
+                    } catch (Throwable t) {
+                        XposedBridge.log("AARE hooks: Waze host check failed: " + t);
                     }
                 }
             });
