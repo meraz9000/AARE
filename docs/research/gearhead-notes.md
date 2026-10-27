@@ -1,5 +1,9 @@
 # Android Auto phone app ("gearhead") — protocol notes
 
+> For the private `com.google.android.gms.car.ICarProjection` interface used by Google Maps,
+> the `DrawingSpec` surface handoff and the signature-permission wall, see
+> [gearhead-projected-activity.md](gearhead-projected-activity.md).
+
 Source: `com.google.android.projection.gearhead` **17.7.663653-release** (versionCode 177663653, minSdk 32, armeabi-v7a APKM).
 Method: static analysis (jadx 1.5.6 decompile, protobuf-lite descriptor decoding, manifest/resources). No dynamic testing.
 All class names are R8-obfuscated `defpackage.*` names valid **only for this exact build**. Message ids,
