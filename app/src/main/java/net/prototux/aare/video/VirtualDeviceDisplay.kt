@@ -82,9 +82,9 @@ internal class VirtualDeviceDisplay private constructor(
     }
 
     /** VirtualTouchEvent.Builder reflection, resolved once instead of on every event. */
-    private class TouchBuilder(cls: Class<*>) {
+    private class TouchBuilder(private val cls: Class<*>) {
         private val ctor = cls.getDeclaredConstructor().apply { isAccessible = true }
-        private fun m(name: String, vararg types: Class<*>) =
+        private fun m(name: String, vararg types: Class<*>): java.lang.reflect.Method =
             cls.getDeclaredMethod(name, *types).apply { isAccessible = true }
         val build = m("build")
         val setAction = m("setAction", Integer.TYPE)
