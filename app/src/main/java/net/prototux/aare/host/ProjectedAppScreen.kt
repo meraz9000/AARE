@@ -65,6 +65,13 @@ fun ProjectedAppScreen(runtime: CarRuntime, app: CarAppEntry, modifier: Modifier
                 }
 
                 override fun onChildAttached() {
+                    // Debug switch: `adb shell setprop debug.aare.touch tx7` keeps the overlay and
+                    // sends car touches to Maps through ICar tx 7 even on the SurfacePackage path.
+                    if (legacyTouchForced()) {
+                        android.util.Log.i("AareProjected", "child attached; debug.aare.touch=tx7, keeping tx 7 overlay")
+                        return
+                    }
+                    android.util.Log.i("AareProjected", "child attached; native input to embedded window")
                     // A SurfaceView sits behind its window by default, and so does the Maps
                     // window embedded in it. Input is hit-tested top-down, so AARE's own
                     // full-screen car window took every touch before Maps could. Raising the
@@ -186,3 +193,9 @@ private class TouchForwardView(context: Context, private val host: ProjectedHost
         return true
     }
 }
+
+private fun legacyTouchForced(): Boolean = runCatching {
+    Class.forName("android.os.SystemProperties")
+        .getMethod("get", String::class.java, String::class.java)
+        .invoke(null, "debug.aare.touch", "") == "tx7"
+}.getOrDefault(false)

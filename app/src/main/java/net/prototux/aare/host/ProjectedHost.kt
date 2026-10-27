@@ -449,7 +449,9 @@ class ProjectedHost(
         try {
             data.writeInterfaceToken(DESCRIPTOR)
             write(data)
-            binder.transact(code, data, null, 0)
+            // FLAG_ONEWAY: these are fire-and-forget. A synchronous call from the main thread
+            // (touch overlay) blocked AARE until Maps answered, and Maps can wait on AARE.
+            binder.transact(code, data, null, IBinder.FLAG_ONEWAY)
         } catch (t: Throwable) {
             Log.w(TAG, "transaction $code failed", t)
         } finally {
