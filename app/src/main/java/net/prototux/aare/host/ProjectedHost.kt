@@ -43,6 +43,9 @@ class ProjectedHost(
     interface Listener {
         fun onStatus(text: String)
         fun onError(message: String)
+
+        /** Maps' SurfacePackage is embedded: input now goes natively to the child surface. */
+        fun onChildAttached() = Unit
     }
 
     private val context = context.applicationContext
@@ -87,6 +90,7 @@ class ProjectedHost(
                                 childPackage = pkg
                                 surfaceView!!.setChildSurfacePackage(pkg)
                                 status("Projecting")
+                                listener.onChildAttached()
                             } else {
                                 pkg.release()
                             }

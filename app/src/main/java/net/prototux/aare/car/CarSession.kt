@@ -379,7 +379,11 @@ class CarSession(
                     ),
                 )
             }
-        }.also { it.show() }
+        }.also {
+            // Set before show(): ProjectedAppScreen reads it when Maps is first composed.
+            runtime.nativeTouchInput = it.hasNativeTouch
+            it.show()
+        }
         val inputCh = touchSize
         touch = TouchMapper(
             inputCh?.first ?: visibleW,

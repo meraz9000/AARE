@@ -73,10 +73,14 @@ class ProjectionDisplay(
             )
     }
 
+    /** True when touches are injected through a VirtualTouchscreen (real input events). */
+    val hasNativeTouch: Boolean
+        get() = virtualDevice?.hasTouchscreen == true
+
     /** Must be called on the main thread. */
     fun show() {
         val d = display.display
-        Log.i("AareSession", "show display id=${d.displayId} valid=${d.isValid} name=${d.name}")
+        Log.i("AareSession", "show display id=${d.displayId} valid=${d.isValid} name=${d.name} nativeTouch=$hasNativeTouch")
         val p = CarPresentation(virtualDevice?.deviceContext ?: context, d, content)
         p.show()
         presentation = p
@@ -90,7 +94,7 @@ class ProjectionDisplay(
     fun dispatchTouch(event: MotionEvent) {
         // Injecting through VirtualTouchscreen can synchronously wait for the target display's
         // input pipeline. Doing that on the main thread deadlocks the window it is feeding.
-        val virtual = virtualDevice
+        val virtual = virtualDevice?.takeIf { it.hasTouchscreen }
         if (virtual != null) {
             val copy = MotionEvent.obtain(event)
             event.recycle()

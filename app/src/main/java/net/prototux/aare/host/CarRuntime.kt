@@ -102,6 +102,14 @@ class CarRuntime(
     override var screenWidthDp by mutableIntStateOf(1280)
     override var screenHeightDp by mutableIntStateOf(720)
     override var densityDpi by mutableIntStateOf(160)
+
+    /**
+     * True when touches on this UI arrive as real input through InputDispatcher, so they can
+     * reach an embedded SurfaceControlViewHost child (projected Maps). That is the case on the
+     * phone preview and on a car display backed by a VirtualTouchscreen. When false, car touches
+     * are synthetic View dispatches and projected apps must use the legacy touch transaction.
+     */
+    var nativeTouchInput = true
     @Volatile override var carLocation: Location? = null
     @Volatile override var carHeading: Float? = null
 

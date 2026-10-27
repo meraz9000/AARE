@@ -33,45 +33,46 @@ internal class VirtualDeviceDisplay private constructor(
     private val touchscreenSend: java.lang.reflect.Method?,
     private val touchscreenClose: java.lang.reflect.Method?,
     private val deviceClose: java.lang.reflect.Method?,
+    private val width: Int,
+    private val height: Int,
 ) {
+    val hasTouchscreen: Boolean
+        get() = touchscreen != null && touchscreenSend != null
+
     fun sendTouch(event: MotionEvent): Boolean {
         val send = touchscreenSend ?: return false
         val ts = touchscreen ?: return false
+        val b = touchBuilder ?: return false
         return runCatching {
-            val builderClass = Class.forName("android.hardware.input.VirtualTouchEvent\$Builder")
-            val builderCtor = builderClass.getDeclaredConstructor().apply { isAccessible = true }
-            fun method(name: String, vararg types: Class<*>): java.lang.reflect.Method =
-                builderClass.getDeclaredMethod(name, *types).apply { isAccessible = true }
-            val build = method("build")
-            val setAction = method("setAction", Integer.TYPE)
-            val setX = method("setX", java.lang.Float.TYPE)
-            val setY = method("setY", java.lang.Float.TYPE)
-            val setPointer = method("setPointerId", Integer.TYPE)
-            val setTime = method("setEventTimeNanos", java.lang.Long.TYPE)
-            val setPressure = method("setPressure", java.lang.Float.TYPE)
-            val setTool = method("setToolType", Integer.TYPE)
-            val setMajor = method("setMajorAxisSize", java.lang.Float.TYPE)
             for (i in 0 until event.pointerCount) {
                 val action = when (event.actionMasked) {
-                    MotionEvent.ACTION_DOWN -> 0 // VirtualTouchEvent.ACTION_DOWN
-                    MotionEvent.ACTION_UP -> 1 // ACTION_UP
-                    MotionEvent.ACTION_CANCEL -> 3 // ACTION_CANCEL
+                    MotionEvent.ACTION_DOWN -> ACTION_DOWN
+                    MotionEvent.ACTION_UP -> ACTION_UP
+                    MotionEvent.ACTION_CANCEL -> ACTION_CANCEL
                     MotionEvent.ACTION_POINTER_DOWN ->
-                        if (i == event.actionIndex) 0 else 2 // DOWN : MOVE
+                        if (i == event.actionIndex) ACTION_DOWN else ACTION_MOVE
                     MotionEvent.ACTION_POINTER_UP ->
-                        if (i == event.actionIndex) 1 else 2 // UP : MOVE
-                    else -> 2 // ACTION_MOVE
+                        if (i == event.actionIndex) ACTION_UP else ACTION_MOVE
+                    else -> ACTION_MOVE
                 }
-                val b = builderCtor.newInstance()
-                setAction.invoke(b, action)
-                setX.invoke(b, event.getX(i))
-                setY.invoke(b, event.getY(i))
-                setPointer.invoke(b, event.getPointerId(i))
-                setTime.invoke(b, event.eventTime * 1_000_000L)
-                setPressure.invoke(b, event.getPressure(i))
-                setTool.invoke(b, 1) // TOOL_TYPE_FINGER
-                setMajor.invoke(b, 1f)
-                send.invoke(ts, build.invoke(b))
+                // VirtualTouchEvent.Builder.build() rejects ACTION_CANCEL unless the tool is
+                // TOOL_TYPE_PALM. A rejected cancel used to leave the slot stuck down, which
+                // broke every later touch on the screen.
+                val tool = if (action == ACTION_CANCEL) TOOL_TYPE_PALM else TOOL_TYPE_FINGER
+                // The touchscreen's axes run 0..size-1; the car's edge taps can land on size.
+                val x = event.getX(i).coerceIn(0f, (width - 1).coerceAtLeast(0).toFloat())
+                val y = event.getY(i).coerceIn(0f, (height - 1).coerceAtLeast(0).toFloat())
+                val e = b.newInstance()
+                b.setAction.invoke(e, action)
+                b.setX.invoke(e, x)
+                b.setY.invoke(e, y)
+                b.setPointer.invoke(e, event.getPointerId(i))
+                b.setTime.invoke(e, event.eventTime * 1_000_000L)
+                b.setPressure.invoke(e, event.getPressure(i).coerceIn(0f, 1f))
+                b.setTool.invoke(e, tool)
+                b.setMajor.invoke(e, 1f)
+                val ok = send.invoke(ts, b.build.invoke(e))
+                if (ok == false) Log.w(TAG, "sendTouchEvent rejected action=$action x=$x y=$y")
             }
             true
         }.getOrElse {
@@ -79,6 +80,27 @@ internal class VirtualDeviceDisplay private constructor(
             false
         }
     }
+
+    /** VirtualTouchEvent.Builder reflection, resolved once instead of on every event. */
+    private class TouchBuilder(cls: Class<*>) {
+        private val ctor = cls.getDeclaredConstructor().apply { isAccessible = true }
+        private fun m(name: String, vararg types: Class<*>) =
+            cls.getDeclaredMethod(name, *types).apply { isAccessible = true }
+        val build = m("build")
+        val setAction = m("setAction", Integer.TYPE)
+        val setX = m("setX", java.lang.Float.TYPE)
+        val setY = m("setY", java.lang.Float.TYPE)
+        val setPointer = m("setPointerId", Integer.TYPE)
+        val setTime = m("setEventTimeNanos", java.lang.Long.TYPE)
+        val setPressure = m("setPressure", java.lang.Float.TYPE)
+        val setTool = m("setToolType", Integer.TYPE)
+        val setMajor = m("setMajorAxisSize", java.lang.Float.TYPE)
+        fun newInstance(): Any = ctor.newInstance()
+    }
+
+    private val touchBuilder: TouchBuilder? = runCatching {
+        TouchBuilder(Class.forName("android.hardware.input.VirtualTouchEvent\$Builder"))
+    }.onFailure { Log.w(TAG, "VirtualTouchEvent.Builder unavailable", it) }.getOrNull()
 
     fun release() {
         runCatching { touchscreenClose?.invoke(touchscreen) }
@@ -88,6 +110,13 @@ internal class VirtualDeviceDisplay private constructor(
 
     companion object {
         private const val TAG = "AareVirtualDevice"
+        // android.hardware.input.VirtualTouchEvent constants.
+        private const val ACTION_DOWN = 0
+        private const val ACTION_UP = 1
+        private const val ACTION_MOVE = 2
+        private const val ACTION_CANCEL = 3
+        private const val TOOL_TYPE_FINGER = 1
+        private const val TOOL_TYPE_PALM = 5
         private const val VIRTUAL_DISPLAY_FLAG_SUPPORTS_TOUCH = 1 shl 6
         private const val VIRTUAL_DISPLAY_FLAG_TRUSTED = 1 shl 10
         private const val VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY = 1 shl 3
@@ -129,7 +158,9 @@ internal class VirtualDeviceDisplay private constructor(
                         it.name == "createContext" && it.parameterTypes.isEmpty()
                     }?.invoke(device) as? android.content.Context
                 }.getOrNull()
-                VirtualDeviceDisplay(display, device, deviceContext, touchscreen, send, tsClose, devClose)
+                VirtualDeviceDisplay(
+                    display, device, deviceContext, touchscreen, send, tsClose, devClose, width, height,
+                )
             }.getOrElse {
                 Log.w(TAG, "VirtualDevice display unavailable; using DisplayManager fallback", it)
                 null

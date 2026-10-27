@@ -1,8 +1,6 @@
 package net.prototux.aare.host
 
 import android.content.Context
-import android.graphics.Region
-import android.util.Log
 import android.view.MotionEvent
 import android.view.Surface
 import android.view.SurfaceHolder
@@ -63,6 +61,10 @@ fun ProjectedAppScreen(runtime: CarRuntime, app: CarAppEntry, modifier: Modifier
                     error = message
                     status = null
                 }
+
+                override fun onChildAttached() {
+                    nativeInput = true
+                }
             },
         )
     }
@@ -105,13 +107,16 @@ fun ProjectedAppScreen(runtime: CarRuntime, app: CarAppEntry, modifier: Modifier
                             lastSurface = holder.surface
                             lastWidth = width
                             lastHeight = height
-                            host.start(surfaceView, width, height, dpi)
-                            nativeInput = host.usesNativeInput
-                            runCatching {
-                                surfaceView.rootSurfaceControl?.setTouchableRegion(
-                                    Region(0, 0, width, height),
-                                )
-                            }.onFailure { Log.w("AareProjected", "setTouchableRegion failed", it) }
+                            // Only offer Maps the SurfaceControlViewHost path when touches
+                            // are real input: a synthetic dispatchTouchEvent() never crosses
+                            // into an embedded child window, so on a plain virtual display
+                            // stay on the legacy path where TouchForwardView sends tx 7.
+                            nativeInput = false
+                            if (runtime.nativeTouchInput) {
+                                host.start(surfaceView, width, height, dpi)
+                            } else {
+                                host.start(holder.surface, width, height, dpi)
+                            }
                         }
 
                         override fun surfaceDestroyed(holder: SurfaceHolder) {
@@ -122,9 +127,9 @@ fun ProjectedAppScreen(runtime: CarRuntime, app: CarAppEntry, modifier: Modifier
                 }
             },
         )
-        // With VirtualDevice/VirtualTouchscreen (or a valid SCVH input token), Android
-        // delivers car touches directly to the embedded Maps child surface. The old
-        // synthetic overlay must stay out of the way or it blocks the main thread.
+        // Once Maps' SurfacePackage is embedded, real input (VirtualTouchscreen or the phone
+        // preview) goes straight to the child surface, so the overlay must get out of the way.
+        // Until then (or on the legacy path) the overlay forwards touches with ICar tx 7.
         if (!nativeInput) {
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
@@ -145,9 +150,13 @@ fun ProjectedAppScreen(runtime: CarRuntime, app: CarAppEntry, modifier: Modifier
                     Button(onClick = {
                         error = null
                         status = "Retrying ${info.label}…"
+                        nativeInput = false
                         val view = lastSurfaceView
-                        if (view != null) host.start(view, lastWidth, lastHeight, dpi)
-                        else host.start(lastSurface!!, lastWidth, lastHeight, dpi)
+                        if (view != null && runtime.nativeTouchInput) {
+                            host.start(view, lastWidth, lastHeight, dpi)
+                        } else {
+                            host.start(lastSurface!!, lastWidth, lastHeight, dpi)
+                        }
                     }) { Text("Retry") }
                 }
             }
