@@ -20,9 +20,9 @@ It needs no Google Play Services.
 
 > [!WARNING]
 > **This is early software.** The protocol stack is tested against a simulated head unit, against
-> AARE's own desktop head unit and against Google's Desktop Head Unit up to the certificate check
-> (see below). So far it has been tried in two real cars, one over wireless and one over USB (see
-> [Tested on real head units](#tested-on-real-head-units)). Don't depend on it while driving
+> AARE's own desktop head unit, and against Google's Desktop Head Unit with a phone certificate it
+> trusts (see below). So far it has been tried in two real cars, one over wireless and one over USB
+> (see [Tested on real head units](#tested-on-real-head-units)). Don't depend on it while driving
 > until you have tried it in yours.
 
 ## What works
@@ -37,7 +37,7 @@ It needs no Google Play Services.
 | Sensors: driving restrictions, night mode, car GPS and compass (passed to nav apps) | done |
 | Every other sensor the car offers (RPM, odometer, fuel and range, temperature, HVAC, doors, lights, tyres, accelerometer, gyroscope…) for car apps (car hardware API) and the assistant | new, tested only with the desktop head unit's fake car |
 | Car App Library host: handshake, templates, map surface, navigation trips, alerts, car hardware, microphone | done |
-| Google Maps' private projected activity (experimental): bind, `DrawingSpec` surface, resume, touch/key forwarding | display proven in the phone preview, the desktop head unit, and on-device via the Vector/LSPosed module; input needs car testing |
+| Google Maps' private projected activity (experimental): bind, `DrawingSpec` surface, resume, touch/key forwarding | display proven in the phone preview, AARE's desktop head unit, Google's stock Desktop Head Unit, and on-device via the Vector/LSPosed module; input needs car testing |
 | Waze's public Car App Library service (experimental): HostValidator test hook | reaches Waze's one-time setup screen; full navigation untested |
 | Template rendering (list, grid, pane, message, search, sign-in, tabs, navigation, map...) | done |
 | Media apps: browse, search, now playing, transport, active session tracking | done |
@@ -310,6 +310,24 @@ network mode stays on until you switch it off.
 ./headunit.sh --cluster             # also an 800x480 instrument cluster, in a second window
 ./headunit.sh --portrait            # a portrait screen (720x1280)
 ```
+
+### Google's stock Desktop Head Unit
+
+AARE can also drive Google's stock DHU. This needs a phone certificate the DHU trusts; AARE's
+generated self-signed certificate is rejected. With a trusted certificate installed under
+*Settings → Advanced → Phone certificates*:
+
+```sh
+adb shell am start -n net.prototux.aare/.ui.MainActivity --ez hu_server true
+adb forward tcp:5277 localabstract:aare_hu
+"$ANDROID_HOME/extras/google/auto/desktop-head-unit" \
+  -c "$ANDROID_HOME/extras/google/auto/config/default_720p.ini" -a
+```
+
+On the first connection, tap **Trust** in AARE for the DHU certificate, then reconnect. The
+screenshot below is Google's DHU rendering AARE with Maps projected.
+
+![Google's Desktop Head Unit showing AARE and Google Maps](docs/screenshots/aare-stock-dhu.png)
 
 | On the computer | In the car |
 |---|---|
