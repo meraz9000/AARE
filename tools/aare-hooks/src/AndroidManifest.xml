@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="net.prototux.aare.hooks"
+    android:versionCode="1"
+    android:versionName="1.0">
+
+    <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="37" />
+
+    <application
+        android:allowBackup="false"
+        android:hasCode="true"
+        android:label="AARE Projection Hooks">
+        <meta-data android:name="xposedmodule" android:value="true" />
+        <meta-data android:name="xposeddescription"
+            android:value="On-device Maps CAPTURE_VIDEO_OUTPUT and Waze HostValidator hooks for AARE." />
+        <meta-data android:name="xposedminversion" android:value="82" />
+    </application>
+</manifest>

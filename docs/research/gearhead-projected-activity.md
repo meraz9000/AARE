@@ -330,9 +330,10 @@ app and preserve the protocol implementation in this repository.
    target build. Do not assume every PackageManager will honor a hand-edited signature grant.
 2. **Root + LSPosed/Frida hook in the Maps process** that makes `bemm.h()` return immediately (or
    makes `checkCallingPermission` return 0 for AARE's UID). AARE remains unmodified. **This is
-   the path that produced the frame above**, with a UID-scoped Frida hook. It is the most reliable
-   way to test the full pixel path without patching the APK, but it is version specific and
-   clearly outside normal app behavior.
+   the path that produced the frame above**: first with a UID-scoped Frida hook, then packaged as
+   the small [AARE Projection Hooks](../../tools/aare-hooks/README.md) Vector/LSPosed module, which
+   needs no laptop. It is the most reliable way to test the full pixel path without patching the
+   APK, but it is version specific and clearly outside normal app behavior.
 3. **Patched Maps APK** with the `h()` check removed and re-signed, installed as a system app
    replacement. It works, but it modifies Google Maps, breaks Play Store updates/signature checks,
    and has obvious legal/ToS exposure. Not recommended.
@@ -375,9 +376,12 @@ encoder/transport path (screenshot in `docs/screenshots/aare-headunit-maps.png`)
 logging the full setup/resume sequence.
 Touch events reach `ProjectedHost` with the correct local coordinates; whether Maps pans while
 it is following a route is still being checked. The permission gate is unchanged: AARE itself
-cannot hold `CAPTURE_VIDEO_OUTPUT`, so the working test path is the UID-scoped Maps-process hook
-in `tools/gearhead-projection-probe/frida/`. A production build still needs a root/LSPosed
-permission strategy and reconnect/retry polish.
+cannot hold `CAPTURE_VIDEO_OUTPUT` on a stock install. The on-device
+[AARE Projection Hooks](../../tools/aare-hooks/README.md) Vector/LSPosed module now grants the
+check only to AARE's UID; the Frida harness in `tools/gearhead-projection-probe/frida/` remains
+the development alternative. A phone with the module installed renders Maps with no laptop
+attached (screenshot in `docs/screenshots/aare-lsposed-maps.png`). Remaining work is reconnect/
+retry polish and a real car/input test.
 
 ## 7. Waze is not this protocol
 
@@ -469,6 +473,20 @@ adb shell su -c 'am start -W -n net.prototux.aare/.ui.CarPreviewActivity \
 python3 run_waze.py
 ```
 
+To run the same thing on the phone without the laptop, build and install the on-device module:
+
+```sh
+cd tools/aare-hooks
+./build.sh
+adb install -r build/aare-hooks.apk
+adb shell su -c '/data/adb/modules/zygisk_vector/cli modules enable net.prototux.aare.hooks'
+adb shell su -c '/data/adb/modules/zygisk_vector/cli scope set net.prototux.aare.hooks \
+  com.google.android.apps.maps/0 com.waze/0'
+```
+
+Force-stop Maps and AARE, start `CarPreviewActivity` with the `launchPackage` extra, and no Frida
+process is needed. See `tools/aare-hooks/README.md` for Vector requirements and logs.
+
 The probe was built against Android SDK 37, build-tools 36.0.0, and the debug keystore. It requests
 `CAPTURE_VIDEO_OUTPUT` only to print whether the permission is granted; without a root grant it is
 denied at install and the request is harmless.
@@ -479,9 +497,10 @@ The private host API is real, small, and now documented and demonstrated. A host
 exported service, perform `onSetup`, pass a `Surface` in `DrawingSpec`, resume the projection, and
 receive Maps' real navigation frames. The remaining barrier is a signature permission enforced
 inside Maps, not the absence of a public API. On a retail unrooted phone, Maps cannot be hosted by
-AARE. A root-side grant or a Maps-process hook is required; the UID-scoped hook path is the one
-proven here. Root alone, from a shell or Shizuku user service, is not enough because AMS will not
-bind the service for a process it does not know.
+AARE. A root-side grant or a Maps-process hook is required. The UID-scoped hook path is the one
+proven here; it is now packaged as an on-device Vector/LSPosed module so testing does not need a
+laptop. Root alone, from a shell or Shizuku user service, is not enough because AMS will not bind
+the service for a process it does not know.
 
 For Waze, the public Car App Library path works to Waze's own setup screen once a test-only
 host-validator hook allows AARE; that is a separate host-identity problem, not `ICarProjection`.
