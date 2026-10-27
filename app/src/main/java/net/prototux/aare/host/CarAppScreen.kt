@@ -172,6 +172,8 @@ private class ConnectionTemplateHost(val conn: CarAppConnection, val runtime: Ca
     override val driving: Boolean get() = runtime.ui.drivingRestricted
     override val night: Boolean get() = runtime.ui.night
     override val appLabel: String get() = conn.info.label
+    override val appPackage: String get() = conn.info.packageName
+    override fun restartApp() = runtime.restartApp(conn)
     override fun contentLimit(type: Int): Int = runtime.contentLimit(type)
     override val done = CarAppConnection.templateDone
     override fun back() = conn.back()

@@ -49,6 +49,10 @@ are in [`gearhead-notes.md`](gearhead-notes.md).
 - **Nuvio Cast surface touch** now has a targeted forwarding path: AARE attaches a gesture
   listener to `dev.lab.ytcar`'s `SurfaceView` and sends tap/scroll/fling/scale to its
   `SurfaceCallback`. It builds, but still needs an on-device test; Nuvio's own `onScale` only logs.
+- **Nuvio Cast Exit is now a restart button**: AARE intercepts the app's `Exit` action, force-stops
+  `dev.lab.ytcar` through `su` (or `killBackgroundProcesses` if root is unavailable), then
+  reconnects its `CarAppService`. On a rooted install, grant AARE root once so this clears a
+  frozen process; without root it still reconnects but may not kill the old process.
 - **Waze** reaches its one-time setup screen with the HostValidator hook; full navigation needs
   Waze signed in on the phone. This is separate from the Maps private API.
 - The current code has test-only infrastructure: a trusted VirtualDevice display, a Companion

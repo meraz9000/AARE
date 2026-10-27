@@ -102,7 +102,14 @@ internal fun ActionView(
             carIcon = action.icon
             title = action.title
             val delegate = action.onClickDelegate
-            if (delegate != null) onClick = { host.click(delegate) }
+            // Nuvio Cast's "Exit" closes its screen, which is useless when the app is frozen.
+            // Turn that action into a kill-and-relaunch recovery button.
+            val restartNuvio = host.appPackage == "dev.lab.ytcar" &&
+                action.title?.toString()?.equals("Exit", ignoreCase = true) == true
+            when {
+                restartNuvio -> onClick = { host.restartApp() }
+                delegate != null -> onClick = { host.click(delegate) }
+            }
         }
     }
     // stable copies for the content lambda

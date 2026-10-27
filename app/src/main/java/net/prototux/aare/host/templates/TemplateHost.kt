@@ -25,6 +25,12 @@ interface TemplateHost {
     /** The app's label, for headers that use Action.APP_ICON. */
     val appLabel: String
 
+    /** Package of the app currently being rendered. */
+    val appPackage: String
+
+    /** Kill and relaunch the app (used as a recovery action for frozen apps). */
+    fun restartApp()
+
     /** Max items for a content type (ConstraintManager.CONTENT_LIMIT_TYPE_*). */
     fun contentLimit(type: Int): Int
 

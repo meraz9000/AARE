@@ -1,5 +1,6 @@
 package net.prototux.aare.host
 
+import android.app.ActivityManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -27,8 +28,12 @@ import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.util.concurrent.TimeUnit
 import net.prototux.aare.R
 import net.prototux.aare.Settings
 import net.prototux.aare.car.Calls
@@ -353,6 +358,28 @@ class CarRuntime(
         clusterConnections.values.forEach { it.release() }
         clusterConnections.clear()
         if (ownsMedia) media.release()
+    }
+
+    /** Kill a frozen hosted app and bring its CarAppService back up from scratch. */
+    fun restartApp(conn: CarAppConnection) {
+        val pkg = conn.info.packageName
+        notice("Restarting ${conn.info.label}", "Killing and reopening the app")
+        conn.release()
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                val forceStopped = runCatching {
+                    val process = ProcessBuilder("su", "-c", "am force-stop $pkg")
+                        .redirectErrorStream(true)
+                        .start()
+                    process.waitFor(4, TimeUnit.SECONDS) && process.exitValue() == 0
+                }.getOrDefault(false)
+                if (!forceStopped) {
+                    context.getSystemService(ActivityManager::class.java)?.killBackgroundProcesses(pkg)
+                }
+            }
+            delay(700)
+            conn.connect()
+        }
     }
 
     /** Rescans car apps (package manager work and icons on a background thread). */
