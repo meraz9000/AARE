@@ -4,11 +4,15 @@ import android.app.Application;
 import android.util.Log;
 
 import com.google.android.libraries.navigation.NavigationApi;
+import com.google.android.libraries.navigation.NavigationUpdatesOptions;
 import com.google.android.libraries.navigation.Navigator;
+
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /** Owns the process-wide Navigation SDK Navigator. */
 public final class NavApplication extends Application {
     private static final String TAG = "AareNav";
+    private static final AtomicBoolean FEED_REGISTERED = new AtomicBoolean();
     private static Navigator navigator;
 
     public static Navigator navigator() {
@@ -37,6 +41,7 @@ public final class NavApplication extends Application {
                 public void onNavigatorReady(Navigator value) {
                     navigator = value;
                     Log.i(TAG, "Navigator ready: " + NavigationApi.getNavSDKVersion());
+                    registerTurnByTurnFeed(value);
                 }
 
                 @Override
@@ -46,6 +51,25 @@ public final class NavApplication extends Application {
             });
         } catch (Throwable t) {
             Log.w(TAG, "Navigator initialization failed", t);
+        }
+    }
+
+    private void registerTurnByTurnFeed(Navigator value) {
+        if (!FEED_REGISTERED.compareAndSet(false, true)) return;
+        try {
+            NavigationUpdatesOptions options = NavigationUpdatesOptions.builder()
+                    .setNumNextStepsToPreview(2)
+                    .setGeneratedStepImagesType(
+                            NavigationUpdatesOptions.GeneratedStepImagesType.BITMAP)
+                    .setDisplayMetrics(getResources().getDisplayMetrics())
+                    .build();
+            boolean registered = value.registerServiceForNavUpdates(
+                    getPackageName(), NavInfoService.class.getName(), options);
+            Log.i(TAG, "Turn-by-turn feed registered=" + registered);
+            if (!registered) FEED_REGISTERED.set(false);
+        } catch (Throwable t) {
+            FEED_REGISTERED.set(false);
+            Log.w(TAG, "Turn-by-turn feed registration failed", t);
         }
     }
 }
