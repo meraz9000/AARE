@@ -66,8 +66,14 @@ class ProjectedHost(
     /** Keep the embedded Maps surface focused when another split pane is present. */
     fun requestFocus() {
         surfaceView?.let { view ->
-            if (!view.hasFocus()) view.requestFocus()
+            if (!view.hasFocus()) {
+                val requested = view.requestFocusFromTouch()
+                Log.i("AareProjected", "focus request hasFocus=${view.hasFocus()} requested=$requested")
+            }
         }
+        // A split pane can steal window focus from the embedded activity. Reassert input focus
+        // before injecting touch, like gearhead does after the projection handshake.
+        if (service != null) sendInputFocus(focused = true, touchMode = true)
     }
 
     private val callback = object : Binder() {

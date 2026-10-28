@@ -113,6 +113,12 @@ fun ProjectedAppScreen(runtime: CarRuntime, app: CarAppEntry, modifier: Modifier
                     isFocusable = true
                     isFocusableInTouchMode = true
                     requestFocus()
+                    setOnTouchListener { _, event ->
+                        if (event.actionMasked == android.view.MotionEvent.ACTION_DOWN) {
+                            host.requestFocus()
+                        }
+                        false
+                    }
                     lastSurfaceView = surfaceView
                     holder.addCallback(object : SurfaceHolder.Callback {
                         override fun surfaceCreated(holder: SurfaceHolder) = Unit

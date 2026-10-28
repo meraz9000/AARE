@@ -213,55 +213,24 @@ internal fun SplitContent(
         }
     }
 
-    Row(modifier.fillMaxSize()) {
-        if (primaryIsLeft) {
-            appContent(
-                primary,
-                Modifier.weight(if (expanded) 1f else 0.68f).fillMaxHeight(),
-            )
-            if (showSecondary) {
-                Box(
-                    Modifier
-                        .width(1.dp)
-                        .fillMaxHeight()
-                        .background(MaterialTheme.colorScheme.outlineVariant),
-                )
-                Box(
-                    Modifier
-                        .weight(0.32f)
-                        .fillMaxHeight()
-                        .graphicsLayer {
-                            translationX = slide.value * size.width
-                            alpha = 1f - slide.value
-                        },
-                ) {
-                    appContent(secondary, Modifier.fillMaxSize())
-                }
+    // Keep the projected app at full content size and overlay the secondary pane on top.
+    // This mirrors how a car head unit keeps the map surface full-width and covers its edge
+    // with the dashboard; resizing the map's SurfaceControlViewHost breaks native map gestures.
+    Box(modifier.fillMaxSize()) {
+        appContent(primary, Modifier.fillMaxSize())
+        if (showSecondary) {
+            Box(
+                Modifier
+                    .align(if (primaryIsLeft) Alignment.CenterEnd else Alignment.CenterStart)
+                    .fillMaxHeight()
+                    .fillMaxWidth(0.32f)
+                    .graphicsLayer {
+                        translationX = (if (primaryIsLeft) 1f else -1f) * slide.value * size.width
+                        alpha = 1f - slide.value
+                    },
+            ) {
+                appContent(secondary, Modifier.fillMaxSize())
             }
-        } else {
-            if (showSecondary) {
-                Box(
-                    Modifier
-                        .weight(0.32f)
-                        .fillMaxHeight()
-                        .graphicsLayer {
-                            translationX = -slide.value * size.width
-                            alpha = 1f - slide.value
-                        },
-                ) {
-                    appContent(secondary, Modifier.fillMaxSize())
-                }
-                Box(
-                    Modifier
-                        .width(1.dp)
-                        .fillMaxHeight()
-                        .background(MaterialTheme.colorScheme.outlineVariant),
-                )
-            }
-            appContent(
-                primary,
-                Modifier.weight(if (expanded) 1f else 0.68f).fillMaxHeight(),
-            )
         }
     }
 }
