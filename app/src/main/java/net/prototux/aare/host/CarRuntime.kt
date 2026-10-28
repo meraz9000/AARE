@@ -659,7 +659,8 @@ class CarRuntime(
 
     /** Waze is the preferred navigation pane in split; Maps remains the full-screen fallback. */
     private fun preferredSplitNav(excludeId: String? = null): CarAppEntry? =
-        ui.apps.firstOrNull { it.packageName == "com.waze" && it.id != excludeId }
+        ui.apps.firstOrNull { it.packageName == CarAppInfo.AARE_NAV_PACKAGE && it.id != excludeId }
+            ?: ui.apps.firstOrNull { it.packageName == "com.waze" && it.id != excludeId }
             ?: ui.apps.firstOrNull { it.kind == CarAppKind.PROJECTED && it.id != excludeId }
 
     private fun openSplitPair(other: CarAppEntry, app: CarAppEntry) {
@@ -739,11 +740,14 @@ class CarRuntime(
             } else {
                 // Waze and AARE Caster are the preferred split pair. Long-pressing either starts
                 // that pair regardless of what is currently open; Maps stays full-screen.
-                val waze = ui.apps.firstOrNull { it.packageName == "com.waze" }
+                val navApp = ui.apps.firstOrNull { it.packageName == CarAppInfo.AARE_NAV_PACKAGE }
+                    ?: ui.apps.firstOrNull { it.packageName == "com.waze" }
                 val caster = ui.apps.firstOrNull { it.packageName == CarAppInfo.AARE_CASTER_PACKAGE }
                 when {
-                    app.packageName == CarAppInfo.AARE_CASTER_PACKAGE && waze != null ->
-                        openSplitPair(waze, app)
+                    app.packageName == CarAppInfo.AARE_CASTER_PACKAGE && navApp != null ->
+                        openSplitPair(navApp, app)
+                    app.packageName == CarAppInfo.AARE_NAV_PACKAGE && caster != null ->
+                        openSplitPair(app, caster)
                     app.packageName == "com.waze" && caster != null ->
                         openSplitPair(app, caster)
                     else -> openInSplit(app)

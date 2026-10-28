@@ -76,6 +76,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import net.prototux.aare.host.CarAppInfo
 import kotlinx.coroutines.delay
 import net.prototux.aare.notify.PhoneGuidance
 import net.prototux.aare.ui.theme.CarTheme
@@ -186,9 +187,15 @@ internal fun SplitContent(
         return
     }
 
-    // Keep a map (the projected app) as the large pane even after a taskbar swap. For two
-    // template apps the left app is primary, exactly as before.
-    val primaryIsLeft = left.kind == CarAppKind.PROJECTED || right.kind != CarAppKind.PROJECTED
+    // Keep the map (projected Maps or AARE Nav) as the large pane even after a taskbar
+    // swap. For two ordinary template apps the left app is primary.
+    val primaryIsLeft = when {
+        left.kind == CarAppKind.PROJECTED -> true
+        right.kind == CarAppKind.PROJECTED -> false
+        left.packageName == CarAppInfo.AARE_NAV_PACKAGE -> true
+        right.packageName == CarAppInfo.AARE_NAV_PACKAGE -> false
+        else -> true
+    }
     val primary = if (primaryIsLeft) left else right
     val secondary = if (primaryIsLeft) right else left
 
@@ -205,19 +212,18 @@ internal fun SplitContent(
         // Phone preview cannot host a second Presentation window. Keep the simple side-by-side
         // fallback there; the car path below keeps the map full-width and overlays the caster.
         androidx.compose.foundation.layout.Row(modifier.fillMaxSize()) {
-            appContent(
-                primary,
-                Modifier
-                    .weight(if (state.splitExpanded) 1f else 0.68f)
-                    .fillMaxHeight(),
-            )
-            if (!state.splitExpanded) {
-                appContent(
-                    secondary,
-                    Modifier
-                        .weight(0.32f)
-                        .fillMaxHeight(),
-                )
+            val primaryModifier = Modifier
+                .weight(if (state.splitExpanded) 1f else 0.68f)
+                .fillMaxHeight()
+            val secondaryModifier = Modifier
+                .weight(0.32f)
+                .fillMaxHeight()
+            if (primaryIsLeft) {
+                appContent(primary, primaryModifier)
+                if (!state.splitExpanded) appContent(secondary, secondaryModifier)
+            } else {
+                if (!state.splitExpanded) appContent(secondary, secondaryModifier)
+                appContent(primary, primaryModifier)
             }
         }
         return
@@ -288,9 +294,12 @@ private fun RailContent(state: CarUiState, actions: CarActions, horizontal: Bool
     // launchable from the grid, just don't pin it to the rail.
     val youtube = state.apps.firstOrNull { it.packageName == YOUTUBE_PACKAGE }
     val media = state.app(state.activeMediaAppId)?.takeUnless { it.packageName == YOUTUBE_PACKAGE }
-    // Maps uses the private projected path, not the navigation Car App Library, but it should
-    // still have a permanent taskbar shortcut next to navigation.
-    val maps = state.apps.firstOrNull { it.kind == CarAppKind.PROJECTED }
+    // Prefer our Navigation SDK app for the permanent map shortcut; fall back to the
+    // private projected Maps bridge on cars without AARE Nav installed.
+    val maps = (state.apps.firstOrNull { it.packageName == CarAppInfo.AARE_NAV_PACKAGE }
+        ?: state.apps.firstOrNull { it.kind == CarAppKind.PROJECTED })
+        ?.takeIf { it.id != nav?.id }
+    val caster = state.apps.firstOrNull { it.packageName == CarAppInfo.AARE_CASTER_PACKAGE }
     val phone = state.apps.firstOrNull { it.kind == CarAppKind.PHONE }
     val settings = state.apps.firstOrNull { it.kind == CarAppKind.SETTINGS }
     val split = state.screen as? CarScreen.Split
@@ -341,7 +350,7 @@ private fun RailContent(state: CarUiState, actions: CarActions, horizontal: Bool
         }
     }
     // Like Android Auto's taskbar: the apps used last, besides the fixed ones (one on a side rail, for height).
-    val fixed = setOfNotNull(nav?.id, maps?.id, media?.id, phone?.id, settings?.id)
+    val fixed = setOfNotNull(nav?.id, maps?.id, caster?.id, media?.id, phone?.id, settings?.id)
     val recent = state.recentAppIds
         .filter { it !in fixed && it != youtube?.id }
         .mapNotNull(state::app)
@@ -365,6 +374,15 @@ private fun RailContent(state: CarUiState, actions: CarActions, horizontal: Bool
             },
             onLongClick = nav?.let { entry -> { actions.taskbarLongPress(entry) } },
         )
+        caster?.takeIf { it.id != nav?.id }?.let { app ->
+            RailApp(
+                app = app,
+                fallback = Icons.Rounded.PlayArrow,
+                selected = on(app),
+                onClick = { actions.taskbarClick(app) },
+                onLongClick = { actions.taskbarLongPress(app) },
+            )
+        }
         media?.let { app ->
             RailApp(app, Icons.Rounded.MusicNote, on(app), onClick = { actions.openApp(app) })
         }

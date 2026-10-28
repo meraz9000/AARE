@@ -31,6 +31,8 @@ data class CarAppInfo(
         /** The caster app is ours in the car UI, even though it is installed as a separate APK. */
         const val AARE_CASTER_PACKAGE = "dev.lab.ytcar"
         const val AARE_CASTER_LABEL = "AARE Caster"
+        /** Our Navigation SDK app, installed as a separate APK. */
+        const val AARE_NAV_PACKAGE = "net.prototux.aare.navigation"
     }
 }
 
