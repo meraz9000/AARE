@@ -282,15 +282,16 @@ public final class NavScreen extends Screen {
         updateActive();
     }
 
-    /** Pick the largest live surface; AARE may send a phone surface and the car surface. */
+    /**
+     * Pick the newest live surface. AARE can leave the previous (larger) surface attached when
+     * the split layout swaps panes; picking the largest left the map rendering into a detached
+     * 2170-wide surface and the new 1476-wide pane showed black. The host creates the new pane's
+     * surface last, so the most recently inserted session is the visible one.
+     */
     private void updateActive() {
         SurfaceSession best = null;
         for (SurfaceSession candidate : sessions.values()) {
-            if (best == null
-                    || (long) candidate.width * candidate.height
-                    > (long) best.width * best.height) {
-                best = candidate;
-            }
+            best = candidate;
         }
         boolean changed = best != active;
         active = best;
