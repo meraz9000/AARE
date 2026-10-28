@@ -413,6 +413,7 @@ class CarSession(
         override fun onInput(report: InputReport) {
             if (report.hasTouchEvent()) {
                 val ev = touch?.map(report.touchEvent) ?: return
+                runtime.focusProjected()
                 display?.dispatchTouch(ev)
             }
             if (report.hasKeyEvent()) {

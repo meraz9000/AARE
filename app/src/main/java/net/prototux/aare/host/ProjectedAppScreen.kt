@@ -111,6 +111,7 @@ fun ProjectedAppScreen(runtime: CarRuntime, app: CarAppEntry, modifier: Modifier
                     val surfaceView = this
                     isClickable = true
                     isFocusable = true
+                    isFocusableInTouchMode = true
                     requestFocus()
                     lastSurfaceView = surfaceView
                     holder.addCallback(object : SurfaceHolder.Callback {

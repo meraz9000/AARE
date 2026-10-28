@@ -540,6 +540,11 @@ class CarRuntime(
     fun projectedApp(id: String): ProjectedAppInfo? = projectedApps[id]
 
     /** True when a projected app is on screen and should receive this hardware key. */
+    /** Re-focus the projected surface when input arrives in a split. */
+    fun focusProjected() {
+        activeProjectedHost?.requestFocus()
+    }
+
     fun projectedKey(code: Int, down: Boolean): Boolean {
         val id = when (val screen = ui.screen) {
             is CarScreen.App -> screen.appId

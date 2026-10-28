@@ -63,6 +63,13 @@ class ProjectedHost(
     private var touchDownTime = 0L
     @Volatile private var generation = 0
 
+    /** Keep the embedded Maps surface focused when another split pane is present. */
+    fun requestFocus() {
+        surfaceView?.let { view ->
+            if (!view.hasFocus()) view.requestFocus()
+        }
+    }
+
     private val callback = object : Binder() {
         override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
             logInbound("callback", code, data, flags)
