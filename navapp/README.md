@@ -7,7 +7,7 @@ This is a prototype, not a Play-ready app. Navigation SDK Android Auto is Previe
 ## Requirements
 
 - Google Maps Platform project with the **Navigation SDK** enabled.
-- An API key restricted for this application (`net.prototux.aare.nav`) with the Navigation SDK / Maps SDK for Android APIs enabled.
+- An API key restricted for this application (`net.prototux.aare.navigation`) with the Navigation SDK / Maps SDK for Android APIs enabled.
 - You must accept the Navigation SDK terms from the phone UI before the map becomes usable.
 
 ## Build
@@ -34,7 +34,7 @@ W/AareNav: MAPS_API_KEY is empty; Navigation SDK cannot initialize
 
 ```sh
 adb install -r navapp/build/outputs/apk/debug/navapp-debug.apk
-adb shell am start -n net.prototux.aare.nav/.MainActivity
+adb shell am start -n net.prototux.aare.navigation/.MainActivity
 ```
 
 In AARE Nav:
@@ -44,7 +44,7 @@ In AARE Nav:
 
 ## Use in AARE
 
-AARE discovers `net.prototux.aare.nav/.NavCarService` like any Car App Library app. The service is declared with the `NAVIGATION` category, `minCarApiLevel=7`, and `ALLOW_ALL_HOSTS_VALIDATOR` for local testing.
+AARE discovers `net.prototux.aare.navigation/.NavCarService` like any Car App Library app. The service is declared with the `NAVIGATION` category, `minCarApiLevel=7`, and `ALLOW_ALL_HOSTS_VALIDATOR` for local testing.
 
 `NavScreen` creates a `VirtualDisplay` from the Car App `SurfaceContainer`, puts `NavigationViewForAuto` in a `Presentation`, and forwards:
 
@@ -57,6 +57,6 @@ This is the documented Navigation SDK Android Auto map pattern. It should theref
 ## Verification status
 
 - Builds successfully with a placeholder/empty key.
-- Installed and discovered by AARE: `AareCarApp: net.prototux.aare.nav: library 1.8.0-rc01, API 7..8, negotiated 8`.
+- Installed and discovered by AARE: `AareCarApp: net.prototux.aare.navigation: library 1.8.0-rc01, API 7..8, negotiated 8`.
 - AARE Nav creates the virtual display, shows the presentation, and logs `map ready`.
 - With no API key the map is black; a real key and terms acceptance are still required before touch/render verification.

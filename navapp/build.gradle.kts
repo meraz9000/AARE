@@ -19,7 +19,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "net.prototux.aare.nav"
+        applicationId = "net.prototux.aare.navigation"
         minSdk = 26
         targetSdk = 37
         versionCode = 1

@@ -21,7 +21,10 @@ import androidx.car.app.navigation.model.NavigationTemplate;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
+import com.google.android.gms.maps.model.LatLng;
 import com.google.android.libraries.navigation.NavigationViewForAuto;
+import com.google.android.libraries.navigation.Navigator;
+import com.google.android.libraries.navigation.Waypoint;
 
 /** Car screen that renders NavigationViewForAuto into the host-provided Surface. */
 public final class NavScreen extends Screen {
@@ -102,7 +105,25 @@ public final class NavScreen extends Screen {
         navigationView.getMapAsync(googleMap -> {
             map = googleMap;
             googleMap.getUiSettings().setAllGesturesEnabled(true);
-            Log.i(TAG, "map ready");
+            googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(
+                    new LatLng(36.1540, -95.9928), 12f));
+            Log.i(TAG, "map ready camera=" + googleMap.getCameraPosition().target
+                    + " zoom=" + googleMap.getCameraPosition().zoom
+                    + " type=" + googleMap.getMapType());
+            Navigator navigator = NavApplication.navigator();
+            if (navigator != null) {
+                try {
+                    navigator.setDestination(Waypoint.builder()
+                            .setLatLng(36.1540, -95.9928)
+                            .setTitle("Tulsa")
+                            .build());
+                    Log.i(TAG, "demo route requested");
+                } catch (Throwable t) {
+                    Log.w(TAG, "route request failed", t);
+                }
+            } else {
+                Log.w(TAG, "navigator was not ready when the map appeared");
+            }
         });
 
         presentation.setContentView(navigationView);

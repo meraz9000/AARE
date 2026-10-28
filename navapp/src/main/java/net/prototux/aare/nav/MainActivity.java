@@ -13,11 +13,15 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.google.android.libraries.navigation.NavigationApi;
 import com.google.android.libraries.navigation.Navigator;
 import com.google.android.libraries.navigation.Waypoint;
+import com.google.android.gms.maps.CameraUpdateFactory;
+import com.google.android.gms.maps.MapView;
+import com.google.android.gms.maps.model.LatLng;
 
 /** Phone-side setup: terms acceptance, Navigator init, and a demo destination. */
 public final class MainActivity extends AppCompatActivity {
     private static final String TAG = "AareNav";
     private TextView status;
+    private MapView mapView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -55,7 +59,34 @@ public final class MainActivity extends AppCompatActivity {
         root.addView(demo, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
+        mapView = new MapView(this);
+        mapView.onCreate(savedInstanceState);
+        mapView.getMapAsync(map -> {
+            map.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(36.1540, -95.9928), 12f));
+            Log.i(TAG, "phone map ready");
+        });
+        root.addView(mapView, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 700));
+
         setContentView(root);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (mapView != null) mapView.onResume();
+    }
+
+    @Override
+    protected void onPause() {
+        if (mapView != null) mapView.onPause();
+        super.onPause();
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (mapView != null) mapView.onDestroy();
+        super.onDestroy();
     }
 
     private void showTerms() {
