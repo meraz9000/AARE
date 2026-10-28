@@ -1,6 +1,8 @@
 package net.prototux.aare.ui.car
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -54,6 +56,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -64,6 +67,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
@@ -148,17 +152,116 @@ private fun ContentArea(
                 val app = state.app(screen.appId)
                 if (app != null) appContent(app, Modifier.fillMaxSize()) else Dashboard(state, actions, navMap, Modifier.fillMaxSize().padding(gutter))
             }
-            is CarScreen.Split -> Row(Modifier.fillMaxSize()) {
-                val left = state.app(screen.leftId)
-                val right = state.app(screen.rightId)
-                if (left != null) {
-                    appContent(left, Modifier.weight(1f).fillMaxHeight())
-                }
-                Box(Modifier.width(1.dp).fillMaxHeight().background(MaterialTheme.colorScheme.outlineVariant))
-                if (right != null) {
-                    appContent(right, Modifier.weight(1f).fillMaxHeight())
+            is CarScreen.Split -> SplitContent(
+                state = state,
+                screen = screen,
+                appContent = appContent,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+}
+
+// ---------------------------------------------------------------- split
+
+/**
+ * A Coolwalk-style split: the projected app is the primary pane at roughly two thirds of the
+ * content width and the other app occupies the remaining third. Expanding the map slides the
+ * secondary pane away, then gives the map the full content area. This is an original layout
+ * inspired by observed metrics; it does not copy Android Auto's artwork or animation assets.
+ */
+@Composable
+internal fun SplitContent(
+    state: CarUiState,
+    screen: CarScreen.Split,
+    appContent: @Composable (CarAppEntry, Modifier) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val left = state.app(screen.leftId)
+    val right = state.app(screen.rightId)
+    if (left == null || right == null) {
+        val only = left ?: right
+        if (only != null) appContent(only, modifier.fillMaxSize())
+        return
+    }
+
+    // Keep a map (the projected app) as the large pane even after a taskbar swap. For two
+    // template apps the left app is primary, exactly as before.
+    val primaryIsLeft = left.kind == CarAppKind.PROJECTED || right.kind != CarAppKind.PROJECTED
+    val primary = if (primaryIsLeft) left else right
+    val secondary = if (primaryIsLeft) right else left
+
+    var expanded by remember(screen) { mutableStateOf(false) }
+    var showSecondary by remember(screen) { mutableStateOf(true) }
+    val slide = remember(screen) { Animatable(0f) }
+
+    LaunchedEffect(state.splitExpanded) {
+        if (state.splitExpanded == expanded) return@LaunchedEffect
+        if (state.splitExpanded) {
+            // Retract the dashboard first, then hand the freed width to the map, so the
+            // SurfaceView is resized once instead of on every animation frame.
+            slide.animateTo(1f, tween(220, easing = FastOutSlowInEasing))
+            expanded = true
+            showSecondary = false
+            slide.snapTo(0f)
+        } else {
+            // Restore the dashboard at the far edge, then slide it back in.
+            expanded = false
+            showSecondary = true
+            slide.snapTo(1f)
+            slide.animateTo(0f, tween(220, easing = FastOutSlowInEasing))
+        }
+    }
+
+    Row(modifier.fillMaxSize()) {
+        if (primaryIsLeft) {
+            appContent(
+                primary,
+                Modifier.weight(if (expanded) 1f else 0.68f).fillMaxHeight(),
+            )
+            if (showSecondary) {
+                Box(
+                    Modifier
+                        .width(1.dp)
+                        .fillMaxHeight()
+                        .background(MaterialTheme.colorScheme.outlineVariant),
+                )
+                Box(
+                    Modifier
+                        .weight(0.32f)
+                        .fillMaxHeight()
+                        .graphicsLayer {
+                            translationX = slide.value * size.width
+                            alpha = 1f - slide.value
+                        },
+                ) {
+                    appContent(secondary, Modifier.fillMaxSize())
                 }
             }
+        } else {
+            if (showSecondary) {
+                Box(
+                    Modifier
+                        .weight(0.32f)
+                        .fillMaxHeight()
+                        .graphicsLayer {
+                            translationX = -slide.value * size.width
+                            alpha = 1f - slide.value
+                        },
+                ) {
+                    appContent(secondary, Modifier.fillMaxSize())
+                }
+                Box(
+                    Modifier
+                        .width(1.dp)
+                        .fillMaxHeight()
+                        .background(MaterialTheme.colorScheme.outlineVariant),
+                )
+            }
+            appContent(
+                primary,
+                Modifier.weight(if (expanded) 1f else 0.68f).fillMaxHeight(),
+            )
         }
     }
 }
@@ -194,10 +297,52 @@ private fun RailContent(state: CarUiState, actions: CarActions, horizontal: Bool
     val nuvio = state.apps.firstOrNull { it.packageName == NUVIO_PACKAGE }
     val phone = state.apps.firstOrNull { it.kind == CarAppKind.PHONE }
     val settings = state.apps.firstOrNull { it.kind == CarAppKind.SETTINGS }
+    val split = state.screen as? CarScreen.Split
+    val splitHasProjected = split != null && listOfNotNull(
+        state.app(split.leftId),
+        state.app(split.rightId),
+    ).any { it.kind == CarAppKind.PROJECTED }
+    val mapToggle: @Composable () -> Unit = {
+        if (splitHasProjected) {
+            Box(
+                Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (state.splitExpanded) MaterialTheme.colorScheme.primaryContainer
+                        else MaterialTheme.colorScheme.surfaceContainerHigh,
+                    )
+                    .clickable { actions.toggleSplitExpanded() }
+                    .semantics {
+                        contentDescription = if (state.splitExpanded) "Show apps" else "Expand map"
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Rounded.Map,
+                    contentDescription = null,
+                    modifier = Modifier.size(22.dp),
+                    tint = if (state.splitExpanded) MaterialTheme.colorScheme.onPrimaryContainer
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
     fun on(app: CarAppEntry?) = app != null && when (val screen = state.screen) {
         is CarScreen.App -> screen.appId == app.id
         is CarScreen.Split -> screen.contains(app.id)
         else -> false
+    }
+    val mapsShortcut: @Composable () -> Unit = {
+        maps?.let { app ->
+            RailApp(
+                app = app,
+                fallback = Icons.Rounded.Map,
+                selected = on(app),
+                onClick = { actions.taskbarClick(app) },
+                onLongClick = { actions.taskbarLongPress(app) },
+            )
+        }
     }
     // Like Android Auto's taskbar: the apps used last, besides the fixed ones (one on a side rail, for height).
     val fixed = setOfNotNull(nav?.id, maps?.id, media?.id, phone?.id, settings?.id)
@@ -224,15 +369,6 @@ private fun RailContent(state: CarUiState, actions: CarActions, horizontal: Bool
             },
             onLongClick = if (navIsNuvio) ({ actions.taskbarLongPress(nav) }) else null,
         )
-        maps?.let { app ->
-            RailApp(
-                app = app,
-                fallback = Icons.Rounded.Map,
-                selected = on(app),
-                onClick = { actions.taskbarClick(app) },
-                onLongClick = { actions.taskbarLongPress(app) },
-            )
-        }
         media?.let { app ->
             RailApp(app, Icons.Rounded.MusicNote, on(app), onClick = { actions.openApp(app) })
         }
@@ -267,6 +403,7 @@ private fun RailContent(state: CarUiState, actions: CarActions, horizontal: Bool
             verticalAlignment = Alignment.CenterVertically,
         ) {
             val driverEnd: @Composable () -> Unit = { Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                mapToggle()
                 if (state.driverOnRight) { menu(); mic() } else { mic(); menu() }
             } }
             val status: @Composable () -> Unit = { Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -274,7 +411,10 @@ private fun RailContent(state: CarUiState, actions: CarActions, horizontal: Bool
             } }
             if (state.driverOnRight) status() else driverEnd()
             Row(Modifier.weight(1f), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { apps(if (tightBar) 0 else 2) }
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    apps(if (tightBar) 0 else 2)
+                    mapsShortcut()
+                }
             }
             if (state.driverOnRight) driverEnd() else status()
         }
@@ -289,6 +429,8 @@ private fun RailContent(state: CarUiState, actions: CarActions, horizontal: Bool
             Spacer(Modifier.height(4.dp))
             WeatherChip(state.weather)
             NotificationBell(state) { bell() }
+            mapToggle()
+            Spacer(Modifier.height(4.dp))
             // On short displays the fixed buttons plus the app shortcuts are taller than the
             // rail. Keep the menu/mic pinned and let the app list scroll instead of clipping them.
             Column(
@@ -299,6 +441,8 @@ private fun RailContent(state: CarUiState, actions: CarActions, horizontal: Bool
                 // A side rail has room for a recent app only on tall screens.
                 apps(if (LocalConfiguration.current.screenHeightDp >= 800) 1 else 0)
             }
+            mapsShortcut()
+            Spacer(Modifier.height(4.dp))
             menu()
             Spacer(Modifier.height(8.dp))
             mic()

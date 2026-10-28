@@ -646,6 +646,7 @@ class CarRuntime(
     val actions = object : CarActions {
         override fun openApp(app: CarAppEntry) {
             activate(app)
+            ui.splitExpanded = false
             ui.screen = CarScreen.App(app.id)
             rememberRecent(app.id)
         }
@@ -671,6 +672,7 @@ class CarRuntime(
             }
             activate(other)
             activate(app)
+            ui.splitExpanded = false
             ui.screen = CarScreen.Split(other.id, app.id)
             // The new app is the most recent; the one that was already open follows it.
             ui.recentAppIds.remove(other.id)
@@ -684,6 +686,7 @@ class CarRuntime(
             val split = ui.screen as? CarScreen.Split
             if (split != null && split.contains(app.id)) {
                 // Tapping either app in a split swaps the two panes.
+                ui.splitExpanded = false
                 ui.screen = CarScreen.Split(split.rightId, split.leftId)
             } else {
                 openApp(app)
@@ -695,12 +698,17 @@ class CarRuntime(
             if (split != null && split.contains(app.id)) {
                 // The second long-press leaves split screen and makes the pressed app full size.
                 activate(app)
+                ui.splitExpanded = false
                 ui.screen = CarScreen.App(app.id)
                 rememberRecent(app.id)
             } else {
                 // From one app: start a split with it. From the split: replace the other pane.
                 openInSplit(app)
             }
+        }
+
+        override fun toggleSplitExpanded() {
+            if (ui.screen is CarScreen.Split) ui.splitExpanded = !ui.splitExpanded
         }
 
         override fun goHome() { ui.screen = CarScreen.Dashboard }

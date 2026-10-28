@@ -82,13 +82,12 @@ internal fun CarPlayShell(
                         CarScreen.Dashboard -> Dashboard(state, actions, navMap, Modifier.fillMaxSize().padding(12.dp))
                         CarScreen.Launcher -> Home(state, actions)
                         is CarScreen.App -> state.app(screen.appId)?.let { appContent(it, Modifier.fillMaxSize()) } ?: Home(state, actions)
-                        is CarScreen.Split -> Row(Modifier.fillMaxSize()) {
-                            val left = state.app(screen.leftId)
-                            val right = state.app(screen.rightId)
-                            if (left != null) appContent(left, Modifier.weight(1f).fillMaxHeight())
-                            Box(Modifier.width(1.dp).fillMaxHeight().background(CarPlayColors.outlineVariant))
-                            if (right != null) appContent(right, Modifier.weight(1f).fillMaxHeight())
-                        }
+                        is CarScreen.Split -> SplitContent(
+                            state = state,
+                            screen = screen,
+                            appContent = appContent,
+                            modifier = Modifier.fillMaxSize(),
+                        )
                     }
                 }
             }

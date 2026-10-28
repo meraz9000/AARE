@@ -118,6 +118,8 @@ class CarUiState {
     var driverOnRight by mutableStateOf(false)
     /** The rail stays dark even with day colors (a setting). */
     var darkBar by mutableStateOf(false)
+    /** True while the map is expanded over the secondary split pane. */
+    var splitExpanded by mutableStateOf(false)
     /** The CarPlay-style layout (an easter egg, *Settings > Style*). */
     var carPlayStyle by mutableStateOf(false)
     /** The rail runs along the bottom instead of a side. */
@@ -145,6 +147,8 @@ interface CarActions {
      * screen when it is already one of the two split apps.
      */
     fun taskbarLongPress(app: CarAppEntry)
+    /** Expands the map over the secondary pane, or restores the split. */
+    fun toggleSplitExpanded()
     fun goHome()
     fun openLauncher()
     fun assistant()
