@@ -26,48 +26,118 @@ import com.google.android.libraries.navigation.NavigationViewForAuto;
 import com.google.android.libraries.navigation.Navigator;
 import com.google.android.libraries.navigation.Waypoint;
 
-/** Car screen that renders NavigationViewForAuto into the host-provided Surface. */
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+/** Car screen that renders NavigationViewForAuto into host-provided Surfaces. */
 public final class NavScreen extends Screen {
     private static final String TAG = "AareNav";
     private final Handler main = new Handler(Looper.getMainLooper());
+    private final Map<Surface, SurfaceSession> sessions = new LinkedHashMap<>();
+    private SurfaceSession active;
+    private boolean routeRequested;
 
-    private VirtualDisplay virtualDisplay;
-    private android.app.Presentation presentation;
-    private NavigationViewForAuto navigationView;
-    private GoogleMap map;
+    private final class SurfaceSession {
+        final Surface surface;
+        final int width;
+        final int height;
+        final VirtualDisplay display;
+        final android.app.Presentation presentation;
+        final NavigationViewForAuto view;
+        GoogleMap map;
+
+        SurfaceSession(SurfaceContainer container) {
+            surface = container.getSurface();
+            width = container.getWidth();
+            height = container.getHeight();
+            DisplayManager dm = (DisplayManager) getCarContext().getSystemService(
+                    CarContext.DISPLAY_SERVICE);
+            display = dm.createVirtualDisplay(
+                    "AARE Nav map",
+                    width,
+                    height,
+                    container.getDpi(),
+                    surface,
+                    DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY);
+            if (display == null) {
+                throw new IllegalStateException("createVirtualDisplay returned null");
+            }
+            presentation = new android.app.Presentation(
+                    getCarContext(), display.getDisplay());
+            presentation.getWindow().setBackgroundDrawable(
+                    new android.graphics.drawable.ColorDrawable(android.graphics.Color.BLACK));
+            view = new NavigationViewForAuto(getCarContext());
+            view.onCreate(null);
+            view.onStart();
+            view.onResume();
+            view.getMapAsync(googleMap -> {
+                map = googleMap;
+                googleMap.getUiSettings().setAllGesturesEnabled(true);
+                googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(
+                        new LatLng(36.1540, -95.9928), 12f));
+                Log.i(TAG, "map ready " + width + "x" + height
+                        + " camera=" + googleMap.getCameraPosition().target
+                        + " zoom=" + googleMap.getCameraPosition().zoom
+                        + " type=" + googleMap.getMapType());
+                requestDemoRouteOnce();
+            });
+            presentation.setContentView(view);
+            try {
+                presentation.show();
+                Log.i(TAG, "presentation shown " + width + "x" + height);
+            } catch (Throwable t) {
+                Log.e(TAG, "Presentation.show failed " + width + "x" + height, t);
+            }
+        }
+
+        void destroy() {
+            view.onPause();
+            view.onStop();
+            view.onDestroy();
+            presentation.dismiss();
+            display.release();
+            map = null;
+        }
+    }
 
     private final SurfaceCallback surfaceCallback = new SurfaceCallback() {
         @Override
         public void onSurfaceAvailable(@NonNull SurfaceContainer container) {
-            Log.i(TAG, "surface " + container.getWidth() + "x" + container.getHeight()
-                    + "@" + container.getDpi());
-            main.post(() -> createPresentation(container));
+            Log.i(TAG, "surface available " + container.getWidth() + "x"
+                    + container.getHeight() + "@" + container.getDpi());
+            main.post(() -> createSession(container));
         }
 
         @Override
         public void onSurfaceDestroyed(@NonNull SurfaceContainer container) {
-            main.post(NavScreen.this::destroyPresentation);
+            Log.i(TAG, "surface destroyed " + container.getWidth() + "x"
+                    + container.getHeight());
+            main.post(() -> destroySession(container.getSurface()));
         }
 
         @Override
         public void onScroll(float dx, float dy) {
+            Log.i(TAG, "onScroll " + dx + "," + dy);
             main.post(() -> {
-                if (map != null) map.moveCamera(CameraUpdateFactory.scrollBy(dx, dy));
+                if (active != null && active.map != null) {
+                    active.map.moveCamera(CameraUpdateFactory.scrollBy(dx, dy));
+                }
             });
         }
 
         @Override
         public void onScale(float focusX, float focusY, float scaleFactor) {
             main.post(() -> {
-                if (map == null) return;
-                map.moveCamera(CameraUpdateFactory.zoomBy(
+                if (active == null || active.map == null) return;
+                active.map.moveCamera(CameraUpdateFactory.zoomBy(
                         scaleFactor - 1f, new Point((int) focusX, (int) focusY)));
             });
         }
 
         @Override
         public void onClick(float x, float y) {
-            // Navigation SDK's map handles its own POI selection; no synthetic map tap.
+            Log.i(TAG, "onClick " + x + "," + y);
+            // Navigation SDK's map handles its own POI selection.
         }
     };
 
@@ -76,81 +146,60 @@ public final class NavScreen extends Screen {
         carContext.getCarService(AppManager.class).setSurfaceCallback(surfaceCallback);
     }
 
-    private void createPresentation(@NonNull SurfaceContainer container) {
-        if (presentation != null) return;
+    private void createSession(SurfaceContainer container) {
         Surface surface = container.getSurface();
-        DisplayManager dm = (DisplayManager) getCarContext().getSystemService(
-                CarContext.DISPLAY_SERVICE);
-        virtualDisplay = dm.createVirtualDisplay(
-                "AARE Nav map",
-                container.getWidth(),
-                container.getHeight(),
-                container.getDpi(),
-                surface,
-                DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY);
-        if (virtualDisplay == null) {
-            Log.e(TAG, "createVirtualDisplay failed");
-            return;
-        }
-
-        presentation = new android.app.Presentation(
-                getCarContext(), virtualDisplay.getDisplay());
-        presentation.getWindow().setBackgroundDrawable(
-                new android.graphics.drawable.ColorDrawable(android.graphics.Color.BLACK));
-
-        navigationView = new NavigationViewForAuto(getCarContext());
-        navigationView.onCreate(null);
-        navigationView.onStart();
-        navigationView.onResume();
-        navigationView.getMapAsync(googleMap -> {
-            map = googleMap;
-            googleMap.getUiSettings().setAllGesturesEnabled(true);
-            googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(
-                    new LatLng(36.1540, -95.9928), 12f));
-            Log.i(TAG, "map ready camera=" + googleMap.getCameraPosition().target
-                    + " zoom=" + googleMap.getCameraPosition().zoom
-                    + " type=" + googleMap.getMapType());
-            Navigator navigator = NavApplication.navigator();
-            if (navigator != null) {
-                try {
-                    navigator.setDestination(Waypoint.builder()
-                            .setLatLng(36.1540, -95.9928)
-                            .setTitle("Tulsa")
-                            .build());
-                    Log.i(TAG, "demo route requested");
-                } catch (Throwable t) {
-                    Log.w(TAG, "route request failed", t);
-                }
-            } else {
-                Log.w(TAG, "navigator was not ready when the map appeared");
-            }
-        });
-
-        presentation.setContentView(navigationView);
+        if (sessions.containsKey(surface)) return;
         try {
-            presentation.show();
-            Log.i(TAG, "presentation shown");
+            SurfaceSession session = new SurfaceSession(container);
+            sessions.put(surface, session);
+            updateActive();
         } catch (Throwable t) {
-            Log.e(TAG, "Presentation.show failed", t);
+            Log.e(TAG, "create session failed " + container.getWidth() + "x"
+                    + container.getHeight(), t);
         }
     }
 
-    private void destroyPresentation() {
-        if (navigationView != null) {
-            navigationView.onPause();
-            navigationView.onStop();
-            navigationView.onDestroy();
-            navigationView = null;
+    private void destroySession(Surface surface) {
+        SurfaceSession session = sessions.remove(surface);
+        if (session == null) return;
+        session.destroy();
+        updateActive();
+    }
+
+    /** Pick the largest live surface; AARE may send a phone surface and the car surface. */
+    private void updateActive() {
+        SurfaceSession best = null;
+        for (SurfaceSession candidate : sessions.values()) {
+            if (best == null
+                    || (long) candidate.width * candidate.height
+                    > (long) best.width * best.height) {
+                best = candidate;
+            }
         }
-        if (presentation != null) {
-            presentation.dismiss();
-            presentation = null;
+        boolean changed = best != active;
+        active = best;
+        if (changed && best != null) {
+            Log.i(TAG, "active surface " + best.width + "x" + best.height);
         }
-        if (virtualDisplay != null) {
-            virtualDisplay.release();
-            virtualDisplay = null;
+    }
+
+    private void requestDemoRouteOnce() {
+        if (routeRequested) return;
+        Navigator navigator = NavApplication.navigator();
+        if (navigator == null) {
+            Log.w(TAG, "navigator was not ready when the map appeared");
+            return;
         }
-        map = null;
+        routeRequested = true;
+        try {
+            navigator.setDestination(Waypoint.builder()
+                    .setLatLng(36.1540, -95.9928)
+                    .setTitle("Tulsa")
+                    .build());
+            Log.i(TAG, "demo route requested");
+        } catch (Throwable t) {
+            Log.w(TAG, "route request failed", t);
+        }
     }
 
     @NonNull

@@ -207,9 +207,11 @@ private class ConnectionTemplateHost(val conn: CarAppConnection, val runtime: Ca
                         }
                         override fun surfaceDestroyed(holder: SurfaceHolder) = conn.surfaceDestroyed(owner)
                     })
-                    // AARE Caster draws into its own SurfaceView, which sits above Compose's map
-                    // gesture layer. Forward its touches straight to its SurfaceCallback.
-                    if (conn.info.packageName == CarAppInfo.AARE_CASTER_PACKAGE) {
+                    // Surface-backed apps sit above Compose's map gesture layer. Forward
+                    // their touches straight to the Car App SurfaceCallback.
+                    val surfaceTouchApp = conn.info.packageName == CarAppInfo.AARE_CASTER_PACKAGE ||
+                        conn.info.packageName == "net.prototux.aare.navigation"
+                    if (surfaceTouchApp) {
                         val scale = ScaleGestureDetector(ctx, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
                             override fun onScale(detector: ScaleGestureDetector): Boolean {
                                 conn.scale(detector.focusX, detector.focusY, detector.scaleFactor)
@@ -231,8 +233,11 @@ private class ConnectionTemplateHost(val conn: CarAppConnection, val runtime: Ca
                             }
                         })
                         setOnTouchListener { _, event ->
-                            scale.onTouchEvent(event)
-                            if (!scale.isInProgress) gestures.onTouchEvent(event)
+                            if (event.pointerCount >= 2) {
+                                scale.onTouchEvent(event)
+                            } else {
+                                gestures.onTouchEvent(event)
+                            }
                             true
                         }
                     }
