@@ -83,8 +83,8 @@ import net.prototux.aare.ui.theme.LocalCarDimens
 /** YouTube is a phone media app, not a useful car taskbar shortcut. */
 private const val YOUTUBE_PACKAGE = "com.google.android.youtube"
 
-/** The cast app that AARE can put beside Maps in the taskbar. */
-private const val NUVIO_PACKAGE = "dev.lab.ytcar"
+/** The AARE Caster app that can sit beside Maps in the taskbar. */
+private const val AARE_CASTER_PACKAGE = "dev.lab.ytcar"
 
 /**
  * Root of the car screen: a rail on the driver's side and the content area.
@@ -263,7 +263,6 @@ private fun RailContent(state: CarUiState, actions: CarActions, horizontal: Bool
     // Maps uses the private projected path, not the navigation Car App Library, but it should
     // still have a permanent taskbar shortcut next to navigation.
     val maps = state.apps.firstOrNull { it.kind == CarAppKind.PROJECTED }
-    val nuvio = state.apps.firstOrNull { it.packageName == NUVIO_PACKAGE }
     val phone = state.apps.firstOrNull { it.kind == CarAppKind.PHONE }
     val settings = state.apps.firstOrNull { it.kind == CarAppKind.SETTINGS }
     val split = state.screen as? CarScreen.Split
@@ -324,7 +323,7 @@ private fun RailContent(state: CarUiState, actions: CarActions, horizontal: Bool
     val tightBar = horizontal && conf.screenHeightDp > conf.screenWidthDp && conf.screenWidthDp < 800
     val tighterBar = tightBar && conf.screenWidthDp < 640
     val apps: @Composable (Int) -> Unit = { recentSlots ->
-        val navIsNuvio = nav?.packageName == NUVIO_PACKAGE
+        val navIsCaster = nav?.packageName == AARE_CASTER_PACKAGE
         RailApp(
             app = nav,
             fallback = Icons.Rounded.Map,
@@ -332,23 +331,23 @@ private fun RailContent(state: CarUiState, actions: CarActions, horizontal: Bool
             onClick = {
                 when {
                     nav == null -> actions.openLauncher()
-                    navIsNuvio -> actions.taskbarClick(nav)
+                    navIsCaster -> actions.taskbarClick(nav)
                     else -> actions.openApp(nav)
                 }
             },
-            onLongClick = if (navIsNuvio) ({ actions.taskbarLongPress(nav) }) else null,
+            onLongClick = if (navIsCaster) ({ actions.taskbarLongPress(nav) }) else null,
         )
         media?.let { app ->
             RailApp(app, Icons.Rounded.MusicNote, on(app), onClick = { actions.openApp(app) })
         }
         recent.take(recentSlots).forEach { app ->
-            val isNuvio = app.packageName == NUVIO_PACKAGE
+            val isCaster = app.packageName == AARE_CASTER_PACKAGE
             RailApp(
                 app = app,
                 fallback = Icons.Rounded.Apps,
                 selected = on(app),
-                onClick = { if (isNuvio) actions.taskbarClick(app) else actions.openApp(app) },
-                onLongClick = if (isNuvio) ({ actions.taskbarLongPress(app) }) else null,
+                onClick = { if (isCaster) actions.taskbarClick(app) else actions.openApp(app) },
+                onLongClick = if (isCaster) ({ actions.taskbarLongPress(app) }) else null,
             )
         }
         phone?.let { app -> RailApp(app, Icons.Rounded.Call, on(app), onClick = { actions.openApp(app) }) }

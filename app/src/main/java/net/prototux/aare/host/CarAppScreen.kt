@@ -203,9 +203,9 @@ private class ConnectionTemplateHost(val conn: CarAppConnection, val runtime: Ca
                         }
                         override fun surfaceDestroyed(holder: SurfaceHolder) = conn.surfaceDestroyed(owner)
                     })
-                    // Nuvio Cast draws into its own SurfaceView, which sits above Compose's map
+                    // AARE Caster draws into its own SurfaceView, which sits above Compose's map
                     // gesture layer. Forward its touches straight to its SurfaceCallback.
-                    if (conn.info.packageName == "dev.lab.ytcar") {
+                    if (conn.info.packageName == CarAppInfo.AARE_CASTER_PACKAGE) {
                         val scale = ScaleGestureDetector(ctx, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
                             override fun onScale(detector: ScaleGestureDetector): Boolean {
                                 conn.scale(detector.focusX, detector.focusY, detector.scaleFactor)

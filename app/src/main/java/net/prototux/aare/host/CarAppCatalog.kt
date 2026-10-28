@@ -27,6 +27,10 @@ data class CarAppInfo(
         const val CATEGORY_MESSAGING = "androidx.car.app.category.MESSAGING"
         const val CATEGORY_CLUSTER = "androidx.car.app.category.FEATURE_CLUSTER"
         const val MIN_API_KEY = "androidx.car.app.minCarApiLevel"
+
+        /** The caster app is ours in the car UI, even though it is installed as a separate APK. */
+        const val AARE_CASTER_PACKAGE = "dev.lab.ytcar"
+        const val AARE_CASTER_LABEL = "AARE Caster"
     }
 }
 
@@ -48,9 +52,14 @@ object CarAppCatalog {
             val appInfo = si.applicationInfo
             val minApi = appInfo.metaData?.getInt(CarAppInfo.MIN_API_KEY, 0)?.takeIf { it > 0 }
                 ?: si.metaData?.getInt(CarAppInfo.MIN_API_KEY, 0) ?: 0
+            val installedLabel = (si.loadLabel(pm).takeIf { it.isNotBlank() } ?: appInfo.loadLabel(pm)).toString()
             CarAppInfo(
                 service = ComponentName(si.packageName, si.name),
-                label = (si.loadLabel(pm).takeIf { it.isNotBlank() } ?: appInfo.loadLabel(pm)).toString(),
+                label = if (si.packageName == CarAppInfo.AARE_CASTER_PACKAGE) {
+                    CarAppInfo.AARE_CASTER_LABEL
+                } else {
+                    installedLabel
+                },
                 icon = runCatching { si.loadIcon(pm).toBitmap(iconSizePx, iconSizePx) }.getOrNull(),
                 categories = categories,
                 minApiLevel = minApi,

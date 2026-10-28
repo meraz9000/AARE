@@ -33,6 +33,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import net.prototux.aare.host.CarAppInfo
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import net.prototux.aare.ui.theme.LocalCarDimens
@@ -102,12 +103,12 @@ internal fun ActionView(
             carIcon = action.icon
             title = action.title
             val delegate = action.onClickDelegate
-            // Nuvio Cast's "Exit" closes its screen, which is useless when the app is frozen.
+            // AARE Caster's "Exit" closes its screen, which is useless when the app is frozen.
             // Turn that action into a kill-and-relaunch recovery button.
-            val restartNuvio = host.appPackage == "dev.lab.ytcar" &&
+            val restartCaster = host.appPackage == CarAppInfo.AARE_CASTER_PACKAGE &&
                 action.title?.toString()?.equals("Exit", ignoreCase = true) == true
             when {
-                restartNuvio -> onClick = { host.restartApp() }
+                restartCaster -> onClick = { host.restartApp() }
                 delegate != null -> onClick = { host.click(delegate) }
             }
         }

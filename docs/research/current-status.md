@@ -36,7 +36,7 @@ are in [`gearhead-notes.md`](gearhead-notes.md).
   A user-configurable **Connection > Video > Screen edge margin** now adds a uniform black border
   when the car crops despite zero margins; it still needs a real-car verification.
 - **Split screen** has been verified in the phone preview only so far; real-car split touch and
-  Nuvio active-video sizing remain to be tested.
+  AARE Caster active-video sizing remain to be tested.
 
 Maps touch, panning and two-finger pinch-to-zoom are verified in a real Kia EV6. The final touch
 blocker was `DrawingSpec.e`: it is a **system-window insets** rect, not the content bounds. Sending
@@ -46,18 +46,18 @@ test.
 - **Real Kia EV6 test** is complete: Maps projection, tap, panning, two-finger pinch-to-zoom,
   audio and car GPS work. The car uses AARE's imported phone certificate (the local `gearhead2`
   import) and the VirtualDevice setup below.
-- **Nuvio Cast surface touch** now has a targeted forwarding path: AARE attaches a gesture
+- **AARE Caster surface touch** now has a targeted forwarding path: AARE attaches a gesture
   listener to `dev.lab.ytcar`'s `SurfaceView` and sends tap/scroll/fling/scale to its
-  `SurfaceCallback`. It builds, but still needs an on-device test; Nuvio's own `onScale` only logs.
-- **Nuvio Cast Exit is now a restart button**: AARE intercepts the app's `Exit` action, force-stops
+  `SurfaceCallback`. It builds, but still needs an on-device test; AARE Caster's own `onScale` only logs.
+- **AARE Caster Exit is now a restart button**: AARE intercepts the app's `Exit` action, force-stops
   `dev.lab.ytcar` through `su` (or `killBackgroundProcesses` if root is unavailable), then
   reconnects its `CarAppService`. On a rooted install, grant AARE root once so this clears a
   frozen process; without root it still reconnects but may not kill the old process.
 - **Split screen** is implemented: long-press a tile in the car app grid to put it beside the
   current app. It renders two panes in `CarShell`/`CarPlayShell`, keeps both `CarAppConnection`s
   visible, and supports one projected app per split. Verified in the phone preview with Maps +
-  Nuvio Cast (`docs/screenshots/aare-split-maps-nuvio.png`); real-car split/touch is still to be
-  tested. *Back* returns to the left app. The Maps and Nuvio taskbar shortcuts long-press to
+  AARE Caster (`docs/screenshots/aare-split-maps-nuvio.png`); real-car split/touch is still to be
+  tested. *Back* returns to the left app. The Maps and AARE Caster taskbar shortcuts long-press to
   open/close split and tap to swap panes; this is verified in the preview. Splits are 68/32
   primary/secondary, and a small map button at the top of the rail expands/retracts the map pane.
 - **Waze** reaches its one-time setup screen with the HostValidator hook; full navigation needs
