@@ -21,4 +21,5 @@ dependencyResolutionManagement {
 rootProject.name = "AARE"
 include(":aap")
 include(":app")
+include(":navapp")
 include(":headunit")

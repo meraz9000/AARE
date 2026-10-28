@@ -154,6 +154,8 @@ Built-in car apps:
 - **Settings:** colors, bar position, a dark bar even by day, style, passenger mode, message
   notifications, phone audio.
 
+**AARE Nav (Navigation SDK prototype).** `navapp/` is a separate Car App Library navigation app built on the Google Navigation SDK for Android Auto. Unlike Google Maps' private projected surface, it is a normal `CarAppService` with a `NavigationTemplate`, map surface, and AARE-hosted gestures, so it is intended to work in split screen. It needs a Google Maps Platform Navigation SDK key and terms acceptance; see [`navapp/README.md`](navapp/README.md). Without a key it installs and is discovered, but the map is black.
+
 **Google Maps (experimental, rooted only).** AARE can host Google Maps' private projected
 activity, not just its notifications: Maps' real map and navigation UI appear in the app grid
 and on the car screen. This uses the legacy `com.google.android.gms.car.ICarProjection` service,

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AARE Nav</string>
+    <string name="terms_button">Accept Navigation SDK terms</string>
+    <string name="demo_button">Set demo destination (Tulsa)</string>
+    <string name="status_key_missing">Add an API key with -PMAPS_API_KEY=... to build a usable Navigation SDK app.</string>
+</resources>
