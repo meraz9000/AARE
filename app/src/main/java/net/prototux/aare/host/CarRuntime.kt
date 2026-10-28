@@ -463,19 +463,10 @@ class CarRuntime(
         pendingSplitPackage?.let { pkg ->
             entries.firstOrNull { it.packageName == pkg }?.let { app ->
                 pendingSplitPackage = null
-                // Debug/head-unit path: open the projected Maps app first so the split
-                // always has a real primary pane, then open the secondary after it settles.
-                val projected = entries.firstOrNull { it.kind == CarAppKind.PROJECTED }
-                if (projected != null && projected.id != app.id) {
-                    actions.openApp(projected)
-                    main.postDelayed({
-                        actions.openInSplit(app)
-                    }, 1500)
-                } else {
-                    main.postDelayed({
-                        if (ui.screen is CarScreen.App) actions.openInSplit(app)
-                    }, 900)
-                }
+                // The launch package is opened above. Let its connection settle, then split.
+                main.postDelayed({
+                    if (ui.screen is CarScreen.App) actions.openInSplit(app)
+                }, 1500)
             }
         }
         // Restore the last navigation and media apps, so the dashboard isn't empty.
@@ -666,6 +657,32 @@ class CarRuntime(
         while (ui.recentAppIds.size > 6) ui.recentAppIds.removeAt(ui.recentAppIds.lastIndex)
     }
 
+    /** Waze is the preferred navigation pane in split; Maps remains the full-screen fallback. */
+    private fun preferredSplitNav(excludeId: String? = null): CarAppEntry? =
+        ui.apps.firstOrNull { it.packageName == "com.waze" && it.id != excludeId }
+            ?: ui.apps.firstOrNull { it.kind == CarAppKind.PROJECTED && it.id != excludeId }
+
+    private fun openSplitPair(other: CarAppEntry, app: CarAppEntry) {
+        if (other.id == app.id) return
+        if (other.kind == CarAppKind.PROJECTED && app.kind == CarAppKind.PROJECTED) {
+            notice("Split screen", "Only one projected app can be shown at a time")
+            activate(app)
+            ui.splitExpanded = false
+            ui.screen = CarScreen.App(app.id)
+            rememberRecent(app.id)
+            return
+        }
+        activate(other)
+        activate(app)
+        ui.splitExpanded = false
+        ui.screen = CarScreen.Split(other.id, app.id)
+        ui.recentAppIds.remove(other.id)
+        ui.recentAppIds.remove(app.id)
+        ui.recentAppIds.add(0, app.id)
+        ui.recentAppIds.add(1, other.id)
+        while (ui.recentAppIds.size > 6) ui.recentAppIds.removeAt(ui.recentAppIds.lastIndex)
+    }
+
     val actions = object : CarActions {
         override fun openApp(app: CarAppEntry) {
             activate(app)
@@ -693,16 +710,11 @@ class CarRuntime(
                 openApp(app)
                 return
             }
-            activate(other)
-            activate(app)
-            ui.splitExpanded = false
-            ui.screen = CarScreen.Split(other.id, app.id)
-            // The new app is the most recent; the one that was already open follows it.
-            ui.recentAppIds.remove(other.id)
-            ui.recentAppIds.remove(app.id)
-            ui.recentAppIds.add(0, app.id)
-            ui.recentAppIds.add(1, other.id)
-            while (ui.recentAppIds.size > 6) ui.recentAppIds.removeAt(ui.recentAppIds.lastIndex)
+            // Prefer Waze over Maps whenever the other pane is a projected map.
+            val preferredOther = if (other.kind == CarAppKind.PROJECTED) {
+                preferredSplitNav(excludeId = app.id) ?: other
+            } else other
+            openSplitPair(preferredOther, app)
         }
 
         override fun taskbarClick(app: CarAppEntry) {
@@ -725,8 +737,17 @@ class CarRuntime(
                 ui.screen = CarScreen.App(app.id)
                 rememberRecent(app.id)
             } else {
-                // From one app: start a split with it. From the split: replace the other pane.
-                openInSplit(app)
+                // Waze and AARE Caster are the preferred split pair. Long-pressing either starts
+                // that pair regardless of what is currently open; Maps stays full-screen.
+                val waze = ui.apps.firstOrNull { it.packageName == "com.waze" }
+                val caster = ui.apps.firstOrNull { it.packageName == CarAppInfo.AARE_CASTER_PACKAGE }
+                when {
+                    app.packageName == CarAppInfo.AARE_CASTER_PACKAGE && waze != null ->
+                        openSplitPair(waze, app)
+                    app.packageName == "com.waze" && caster != null ->
+                        openSplitPair(app, caster)
+                    else -> openInSplit(app)
+                }
             }
         }
 

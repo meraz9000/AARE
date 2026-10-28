@@ -200,7 +200,8 @@ internal fun SplitContent(
     // full-width so its native touch region is not resized; the caster SurfaceView is raised
     // above it with media-overlay z-order instead of a separate Presentation window.
     if (secondary.packageName == "dev.lab.ytcar" &&
-        LocalContext.current.display?.displayId == android.view.Display.DEFAULT_DISPLAY) {
+        (primary.kind != CarAppKind.PROJECTED ||
+            LocalContext.current.display?.displayId == android.view.Display.DEFAULT_DISPLAY)) {
         // Phone preview cannot host a second Presentation window. Keep the simple side-by-side
         // fallback there; the car path below keeps the map full-width and overlays the caster.
         androidx.compose.foundation.layout.Row(modifier.fillMaxSize()) {
@@ -362,7 +363,7 @@ private fun RailContent(state: CarUiState, actions: CarActions, horizontal: Bool
                     else -> actions.openApp(nav)
                 }
             },
-            onLongClick = if (navIsCaster) ({ actions.taskbarLongPress(nav) }) else null,
+            onLongClick = nav?.let { entry -> { actions.taskbarLongPress(entry) } },
         )
         media?.let { app ->
             RailApp(app, Icons.Rounded.MusicNote, on(app), onClick = { actions.openApp(app) })
