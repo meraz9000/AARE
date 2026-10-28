@@ -460,6 +460,24 @@ class CarRuntime(
                 actions.openApp(app)
             }
         }
+        pendingSplitPackage?.let { pkg ->
+            entries.firstOrNull { it.packageName == pkg }?.let { app ->
+                pendingSplitPackage = null
+                // Debug/head-unit path: open the projected Maps app first so the split
+                // always has a real primary pane, then open the secondary after it settles.
+                val projected = entries.firstOrNull { it.kind == CarAppKind.PROJECTED }
+                if (projected != null && projected.id != app.id) {
+                    actions.openApp(projected)
+                    main.postDelayed({
+                        actions.openInSplit(app)
+                    }, 1500)
+                } else {
+                    main.postDelayed({
+                        if (ui.screen is CarScreen.App) actions.openInSplit(app)
+                    }, 900)
+                }
+            }
+        }
         // Restore the last navigation and media apps, so the dashboard isn't empty.
         if (ui.activeNavAppId == null) {
             val nav = entries.filter { it.kind == CarAppKind.NAVIGATION }
@@ -826,6 +844,10 @@ class CarRuntime(
         /** Set by MainActivity/head-unit debug extras; consumed by the first runtime that sees the package. */
         @Volatile
         var pendingLaunchPackage: String? = null
+
+        /** Debug-only: open this package beside [pendingLaunchPackage] after the catalog loads. */
+        @Volatile
+        var pendingSplitPackage: String? = null
 
         fun carId(app: CarAppInfo) = "car:${app.service.flattenToShortString()}"
         fun mediaId(pkg: String) = "media:$pkg"

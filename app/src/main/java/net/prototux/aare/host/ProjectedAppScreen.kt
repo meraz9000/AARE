@@ -39,7 +39,8 @@ import net.prototux.aare.ui.car.CarAppEntry
 @Composable
 fun ProjectedAppScreen(runtime: CarRuntime, app: CarAppEntry, modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val info = runtime.projectedApp(app.id) ?: return
+    val info = runtime.projectedApp(app.id)
+    if (info == null) return
     var status by remember { mutableStateOf<String?>("Connecting to ${info.label}…") }
     var error by remember { mutableStateOf<String?>(null) }
     var lastSurface by remember { mutableStateOf<Surface?>(null) }
@@ -76,7 +77,22 @@ fun ProjectedAppScreen(runtime: CarRuntime, app: CarAppEntry, modifier: Modifier
                     // window embedded in it. Input is hit-tested top-down, so AARE's own
                     // full-screen car window took every touch before Maps could. Raising the
                     // SurfaceView above the window puts Maps' embedded window on top for input.
-                    lastSurfaceView?.setZOrderOnTop(true)
+                    // In a split with the caster SurfaceView, keep Maps below the caster so the
+                    // latter can be composited above the right edge without resizing Maps.
+                    val splitWithCaster = runtime.ui.screen.let { s ->
+                        s is net.prototux.aare.ui.car.CarScreen.Split &&
+                            runtime.ui.app(if (s.leftId == app.id) s.rightId else s.leftId)
+                                ?.packageName == CarAppInfo.AARE_CASTER_PACKAGE
+                    }
+                    if (splitWithCaster) {
+                        // Stay above the Compose window so native touch still reaches Maps, but
+                        // use the media-overlay layer so AARE Caster's own SurfaceView can sit
+                        // above the right-hand edge.
+                        lastSurfaceView?.setZOrderOnTop(false)
+                        lastSurfaceView?.setZOrderMediaOverlay(true)
+                    } else {
+                        lastSurfaceView?.setZOrderOnTop(true)
+                    }
                     nativeInput = true
                 }
             },

@@ -71,6 +71,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -195,26 +196,27 @@ internal fun SplitContent(
     var showSecondary by remember(screen) { mutableStateOf(true) }
     val slide = remember(screen) { Animatable(0f) }
 
-    // SurfaceView-based apps (AARE Caster) cannot be drawn above the projected map's
-    // setZOrderOnTop SurfaceView. Keep both surfaces side-by-side with real weights for
-    // those apps; the overlay layout is only used for Compose-rendered secondaries.
-    if (secondary.packageName == "dev.lab.ytcar") {
-        Box(modifier.fillMaxSize()) {
-            androidx.compose.foundation.layout.Row(Modifier.fillMaxSize()) {
+    // SurfaceView-based apps (AARE Caster) need to sit above the projected map. Keep the map
+    // full-width so its native touch region is not resized; the caster SurfaceView is raised
+    // above it with media-overlay z-order instead of a separate Presentation window.
+    if (secondary.packageName == "dev.lab.ytcar" &&
+        LocalContext.current.display?.displayId == android.view.Display.DEFAULT_DISPLAY) {
+        // Phone preview cannot host a second Presentation window. Keep the simple side-by-side
+        // fallback there; the car path below keeps the map full-width and overlays the caster.
+        androidx.compose.foundation.layout.Row(modifier.fillMaxSize()) {
+            appContent(
+                primary,
+                Modifier
+                    .weight(if (state.splitExpanded) 1f else 0.68f)
+                    .fillMaxHeight(),
+            )
+            if (!state.splitExpanded) {
                 appContent(
-                    primary,
+                    secondary,
                     Modifier
-                        .weight(if (state.splitExpanded) 1f else 0.68f)
+                        .weight(0.32f)
                         .fillMaxHeight(),
                 )
-                if (!state.splitExpanded) {
-                    appContent(
-                        secondary,
-                        Modifier
-                            .weight(0.32f)
-                            .fillMaxHeight(),
-                    )
-                }
             }
         }
         return

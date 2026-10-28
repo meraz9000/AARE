@@ -151,6 +151,10 @@ class MainActivity : ComponentActivity() {
             CarRuntime.pendingLaunchPackage = it
             applied = true
         }
+        intent?.getStringExtra("splitPackage")?.takeIf { it.isNotBlank() }?.let {
+            CarRuntime.pendingSplitPackage = it
+            applied = true
+        }
         if (intent?.hasExtra("hu_server") == true) {
             Settings(this).headUnitServer = intent.getBooleanExtra("hu_server", false)
             applied = true

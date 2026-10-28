@@ -196,6 +196,10 @@ private class ConnectionTemplateHost(val conn: CarAppConnection, val runtime: Ca
             modifier = modifier,
             factory = { ctx ->
                 SurfaceView(ctx).apply {
+                    if (conn.info.packageName == CarAppInfo.AARE_CASTER_PACKAGE) {
+                        // Render the caster above the full-width Maps SurfaceView in a split.
+                        setZOrderMediaOverlay(true)
+                    }
                     holder.addCallback(object : SurfaceHolder.Callback {
                         override fun surfaceCreated(holder: SurfaceHolder) = Unit
                         override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
