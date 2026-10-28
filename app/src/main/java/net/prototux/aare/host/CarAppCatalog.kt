@@ -45,7 +45,6 @@ object CarAppCatalog {
             else @Suppress("DEPRECATION") pm.queryIntentServices(intent, flags)
         return found.mapNotNull { ri ->
             val si = ri.serviceInfo ?: return@mapNotNull null
-            if (si.packageName == context.packageName) return@mapNotNull null
             val categories = buildSet {
                 ri.filter?.categoriesIterator()?.forEach { add(it) }
             }
