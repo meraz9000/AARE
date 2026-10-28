@@ -52,5 +52,9 @@ dependencies {
     implementation(libs.androidx.car.app)
     implementation("androidx.appcompat:appcompat:1.7.1")
     implementation("com.google.android.libraries.navigation:navigation:8.0.0")
+    implementation("com.google.android.libraries.places:places:4.1.0") {
+        // The Navigation SDK already embeds the Maps SDK classes.
+        exclude(group = "com.google.android.gms", module = "play-services-maps")
+    }
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs_nio:2.1.5")
 }

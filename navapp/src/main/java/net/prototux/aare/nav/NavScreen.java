@@ -11,6 +11,7 @@ import android.view.Surface;
 import androidx.annotation.NonNull;
 import androidx.car.app.AppManager;
 import androidx.car.app.CarContext;
+import androidx.car.app.CarToast;
 import androidx.car.app.Screen;
 import androidx.car.app.SurfaceCallback;
 import androidx.car.app.SurfaceContainer;
@@ -208,6 +209,59 @@ public final class NavScreen extends Screen {
         }
     }
 
+    private void openSearch() {
+        getScreenManager().push(new NavSearchScreen(
+                getCarContext(),
+                (name, latLng) -> navigateTo(name, latLng)));
+    }
+
+    private void navigateTo(@NonNull String name, @NonNull LatLng latLng) {
+        Navigator navigator = NavApplication.navigator();
+        if (navigator == null) {
+            CarToast.makeText(getCarContext(), "Navigator is not ready",
+                    CarToast.LENGTH_SHORT).show();
+            return;
+        }
+        navigator.stopGuidance();
+        navigator.clearDestinations();
+        try {
+            com.google.android.libraries.navigation.ListenableResultFuture<
+                    Navigator.RouteStatus> route = navigator.setDestination(
+                    Waypoint.builder()
+                            .setLatLng(latLng.latitude, latLng.longitude)
+                            .setTitle(name)
+                            .build());
+            route.setOnResultListener(status -> {
+                Log.i(TAG, "search route status=" + status);
+                if (status == Navigator.RouteStatus.OK) {
+                    navigator.startGuidance();
+                    invalidate();
+                } else {
+                    CarToast.makeText(getCarContext(), "No route: " + status,
+                            CarToast.LENGTH_LONG).show();
+                }
+            });
+        } catch (Throwable t) {
+            Log.w(TAG, "search route request failed", t);
+        }
+    }
+
+    private void cancelNavigation() {
+        Navigator navigator = NavApplication.navigator();
+        if (navigator != null) {
+            navigator.stopGuidance();
+            navigator.clearDestinations();
+        }
+        routingInfo = null;
+        invalidate();
+        CarToast.makeText(getCarContext(), "Navigation cancelled", CarToast.LENGTH_SHORT).show();
+    }
+
+    private boolean isNavigating() {
+        Navigator navigator = NavApplication.navigator();
+        return navigator != null && navigator.isGuidanceRunning();
+    }
+
     private final SurfaceCallback surfaceCallback = new SurfaceCallback() {
         @Override
         public void onSurfaceAvailable(@NonNull SurfaceContainer container) {
@@ -335,10 +389,24 @@ public final class NavScreen extends Screen {
     @NonNull
     @Override
     public Template onGetTemplate() {
-        NavigationTemplate.Builder builder = new NavigationTemplate.Builder()
-                .setActionStrip(new ActionStrip.Builder()
-                        .addAction(Action.PAN)
+        ActionStrip.Builder actions = new ActionStrip.Builder()
+                .addAction(new Action.Builder()
+                        .setTitle("Search")
+                        .setIcon(new CarIcon.Builder(IconCompat.createWithResource(
+                                getCarContext(), android.R.drawable.ic_menu_search)).build())
+                        .setOnClickListener(this::openSearch)
                         .build())
+                .addAction(Action.PAN);
+        if (isNavigating()) {
+            actions.addAction(new Action.Builder()
+                    .setTitle("Cancel")
+                    .setIcon(CarIcon.ERROR)
+                    .setOnClickListener(this::cancelNavigation)
+                    .build());
+        }
+        ActionStrip strip = actions.build();
+        NavigationTemplate.Builder builder = new NavigationTemplate.Builder()
+                .setActionStrip(strip)
                 .setMapActionStrip(new ActionStrip.Builder()
                         .addAction(Action.PAN)
                         .build());

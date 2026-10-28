@@ -28,7 +28,9 @@ public final class NavApplication extends Application {
         super.onCreate();
         if (!BuildConfig.MAPS_API_KEY.isEmpty()) {
             NavigationApi.setApiKey(BuildConfig.MAPS_API_KEY);
-            Log.i(TAG, "Navigation SDK key configured");
+            com.google.android.libraries.places.api.Places.initializeWithNewPlacesApiEnabled(
+                    this, BuildConfig.MAPS_API_KEY);
+            Log.i(TAG, "Navigation SDK and Places keys configured");
         } else {
             Log.w(TAG, "MAPS_API_KEY is empty; Navigation SDK cannot initialize");
         }
