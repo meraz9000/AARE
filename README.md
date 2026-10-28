@@ -134,7 +134,9 @@ on screen, like Android Auto's split screen. For example, open Google Maps, go b
 and long-press Nuvio Cast to get the map on the left and the cast app on the right. *Back* closes
 the split and returns to the left app. Only one legacy projected app (Maps) can be shown at a
 time. The Maps and Nuvio Cast shortcuts also work this way: long-press either one to open or
-close a split, and tap one while split to swap the two panes.
+close a split, and tap one while split to swap the two panes. Splits use a 68/32 primary/secondary
+layout. A small map button at the top of the rail expands the map over the secondary pane and
+brings the secondary pane back; this is an original Compose layout, not copied Android Auto assets.
 [Screenshot: Maps and Nuvio Cast side by side](docs/screenshots/aare-split-maps-nuvio.png).
 
 **Instrument cluster.** On cars whose head unit offers a cluster display, AARE sends it its own
