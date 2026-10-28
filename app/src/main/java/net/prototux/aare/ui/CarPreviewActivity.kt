@@ -39,20 +39,31 @@ class CarPreviewActivity : ComponentActivity() {
         runtime.screenHeightDp = (dm.heightPixels / dm.density).toInt()
         runtime.microphone = { sink, stopped -> mic.open(sink, stopped) }
         runtime.start()
-        // Debug/testing hook: launch a car app by package name without tapping the launcher.
+        // Debug/testing hooks: launch a car app by package name without tapping the launcher.
         // Example: adb shell am start -n net.prototux.aare/.ui.CarPreviewActivity \
         //            --es launchPackage com.google.android.apps.maps
+        // Add --es splitPackage <pkg> to open a second app beside it.
         val launchPackage = intent.getStringExtra("launchPackage")
-        if (!launchPackage.isNullOrBlank()) {
+        val splitPackage = intent.getStringExtra("splitPackage")
+        if (!launchPackage.isNullOrBlank() || !splitPackage.isNullOrBlank()) {
             lifecycleScope.launch {
-                repeat(50) { attempt ->
-                    val entry = runtime.ui.apps.firstOrNull { it.packageName == launchPackage }
-                    if (entry != null) {
-                        runtime.actions.openApp(entry)
-                        return@launch
+                suspend fun waitFor(pkg: String): net.prototux.aare.ui.car.CarAppEntry? {
+                    repeat(60) { attempt ->
+                        runtime.ui.apps.firstOrNull { it.packageName == pkg }?.let { return it }
+                        if (attempt == 0) runtime.refreshApps()
+                        delay(100)
                     }
-                    if (attempt == 0) runtime.refreshApps()
-                    delay(100)
+                    return null
+                }
+                if (!launchPackage.isNullOrBlank()) {
+                    waitFor(launchPackage)?.let { runtime.actions.openApp(it) }
+                    delay(900)
+                }
+                if (!splitPackage.isNullOrBlank()) {
+                    waitFor(splitPackage)?.let { entry ->
+                        if (runtime.ui.screen is CarScreen.App) runtime.actions.openInSplit(entry)
+                        else runtime.actions.openApp(entry)
+                    }
                 }
             }
         }

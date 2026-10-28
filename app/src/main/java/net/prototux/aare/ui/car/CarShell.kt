@@ -195,6 +195,31 @@ internal fun SplitContent(
     var showSecondary by remember(screen) { mutableStateOf(true) }
     val slide = remember(screen) { Animatable(0f) }
 
+    // SurfaceView-based apps (AARE Caster) cannot be drawn above the projected map's
+    // setZOrderOnTop SurfaceView. Keep both surfaces side-by-side with real weights for
+    // those apps; the overlay layout is only used for Compose-rendered secondaries.
+    if (secondary.packageName == "dev.lab.ytcar") {
+        Box(modifier.fillMaxSize()) {
+            androidx.compose.foundation.layout.Row(Modifier.fillMaxSize()) {
+                appContent(
+                    primary,
+                    Modifier
+                        .weight(if (state.splitExpanded) 1f else 0.68f)
+                        .fillMaxHeight(),
+                )
+                if (!state.splitExpanded) {
+                    appContent(
+                        secondary,
+                        Modifier
+                            .weight(0.32f)
+                            .fillMaxHeight(),
+                    )
+                }
+            }
+        }
+        return
+    }
+
     LaunchedEffect(state.splitExpanded) {
         if (state.splitExpanded == expanded) return@LaunchedEffect
         if (state.splitExpanded) {
