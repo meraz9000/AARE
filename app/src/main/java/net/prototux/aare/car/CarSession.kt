@@ -705,20 +705,34 @@ class CarSession(
          * indices when it gave any.
          */
         fun chooseVideo(configs: List<VideoConfiguration>, preferred: List<Int>, maxHeight: Int, prefer60: Boolean): Int {
-            fun portrait(i: Int) = resolution(configs[i].codecResolution).let { it.second > it.first }
+            // Margins crop the encoded stream down to the area the car actually displays. A Kia
+            // EV6, for example, may offer 1920x1080 with a 360 px vertical margin: the stream is
+            // 1920x1080, but the live UI is 1920x720. Judge configurations by that visible area,
+            // not by the encoded size, otherwise maxHeight=720 rejects the 1920-wide mode and
+            // leaves the car with a 1280x720 stream stretched onto a 1920x720 screen.
+            fun visible(i: Int): Pair<Int, Int> {
+                val (w, h) = resolution(configs[i].codecResolution)
+                return (w - configs[i].widthMargin).coerceAtLeast(1) to
+                    (h - configs[i].heightMargin).coerceAtLeast(1)
+            }
+            fun portrait(i: Int) = visible(i).let { it.second > it.first }
             // A screen has one shape: when a head unit offers both, the shape of its first preferred
             // configuration is the screen's (the other one would be letterboxed or squeezed).
             val candidates = videoCandidates(configs, preferred, TAG).let { all ->
                 val shape = portrait(preferred.firstOrNull { it in all } ?: all.firstOrNull() ?: return 0)
                 all.filter { portrait(it) == shape }
             }
-            fun shortSide(i: Int) = resolution(configs[i].codecResolution).let { minOf(it.first, it.second) }
+            fun shortSide(i: Int) = visible(i).let { minOf(it.first, it.second) }
             fun score(i: Int): Int {
                 val c = configs[i]
-                val s = shortSide(i)
+                val (w, h) = visible(i)
+                val s = minOf(w, h)
                 val fits = s <= maxHeight
                 val fps60 = c.frameRate == VideoFrameRateType.VIDEO_FPS_60
-                return (if (fits) 1_000_000 else 0) + (if (fits) s else -s) * 10 + (if (fps60 == prefer60) 1 else 0)
+                val pixels = (w.toLong() * h / 10_000L).coerceAtMost(2_000_000L).toInt()
+                return (if (fits) 1_000_000 else 0) +
+                    (if (fits) pixels else -pixels) +
+                    (if (fps60 == prefer60) 1 else 0)
             }
             return candidates.maxByOrNull(::score) ?: 0
         }

@@ -73,9 +73,10 @@ internal fun CarPlayShell(
     appContent: @Composable (CarAppEntry, Modifier) -> Unit,
     navMap: @Composable (CarAppEntry, Modifier) -> Unit,
     overlay: @Composable (Modifier) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     MaterialTheme(colorScheme = CarPlayColors, typography = MaterialTheme.typography) {
-        BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
+        BoxWithConstraints(modifier.fillMaxSize().background(Color.Black)) {
             val content: @Composable (Modifier) -> Unit = { modifier ->
                 Box(modifier) {
                     when (val screen = state.screen) {

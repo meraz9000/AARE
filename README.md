@@ -345,6 +345,7 @@ network mode stays on until you switch it off.
 ./headunit.sh                       # AARE, through AARE's desktop head unit
 ./headunit.sh google                # the official Android Auto app, through Google's Desktop Head Unit
 ./headunit.sh --res 1920x1080 --time-scale 10 --speed 110 --rhd
+./headunit.sh --res 1920x720        # wide console like the Kia EV6 (1920x1080 stream, 1920x720 visible)
 ./headunit.sh --cluster             # also an 800x480 instrument cluster, in a second window
 ./headunit.sh --portrait            # a portrait screen (720x1280)
 ```

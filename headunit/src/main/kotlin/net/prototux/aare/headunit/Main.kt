@@ -52,7 +52,7 @@ private const val USAGE = """AARE desktop head unit: a car screen on your deskto
   --host H --port P      phone to connect to (default 127.0.0.1:5277; use `adb forward tcp:5277 localabstract:aare_hu`)
   --adb-target T         what the adb forward points at on the phone (default localabstract:aare_hu; use tcp:5277
                          for the official Android Auto app's head unit server)
-  --res WxH              800x480, 1280x720 (default), 1920x1080
+  --res WxH              800x480, 1280x720 (default), 1920x720, 1920x1080
   --portrait             portrait screen, like a tall center display: offers VIDEO_720x1280 (default), or
                          VIDEO_1080x1920 with --res 1080x1920 (a landscape --res is turned upright), in a tall window
   --dpi N                screen density sent to the phone (default 160, or 240 at 1080p and 1080x1920)
@@ -551,7 +551,15 @@ private class DesktopHeadUnit(val opts: Map<String, String>) {
             val v = viewport()
             if (img != null) {
                 g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
-                g2.drawImage(img, v[0], v[1], v[2], v[3], null)
+                // The encoded video can be larger than the visible screen: 1920x1080 with a
+                // 360px vertical margin is a 1920x720 console. Show only the active area.
+                val sw = img.width
+                val sh = img.height
+                val vw = minOf(this@DesktopHeadUnit.width, sw)
+                val vh = minOf(this@DesktopHeadUnit.height, sh)
+                val sx = (sw - vw) / 2
+                val sy = (sh - vh) / 2
+                g2.drawImage(img, v[0], v[1], v[0] + v[2], v[1] + v[3], sx, sy, sx + vw, sy + vh, null)
             } else {
                 g2.color = MUTED
                 g2.font = Font(Font.SANS_SERIF, Font.PLAIN, 18)

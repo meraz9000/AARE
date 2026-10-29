@@ -849,6 +849,7 @@ class CarRuntime(
                         }
                     },
                     navMap = { app, mod -> connection(app.id)?.let { CarAppScreen(it, this, mod, compact = true) } },
+                    modifier = modifier,
                     overlay = { mod ->
                         val entry = ui.app(ui.assistantAppId)
                         val conn = entry?.let { connection(it.id) }

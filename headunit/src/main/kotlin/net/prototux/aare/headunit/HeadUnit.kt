@@ -474,18 +474,26 @@ class HeadUnit(
     /**
      * The standard video size the phone encodes at: the largest that fits the screen's height, or
      * on a portrait screen (taller than wide, --portrait) the largest portrait one that fits its width.
+     * A 1920x720 screen (Kia EV6 and similar wide consoles) is encoded as 1920x1080 with a 360px
+     * vertical margin; the phone then draws its UI into the central 1920x720 area.
      */
+    private val videoMargins: Pair<Int, Int> =
+        if (!portrait() && config.width >= 1920 && config.height == 720) 0 to 360 else 0 to 0
+
     private val codecSize: Triple<VideoCodecResolutionType, Int, Int> = when {
         config.height > config.width -> when {
             config.width >= 1440 -> Triple(VideoCodecResolutionType.VIDEO_1440x2560, 1440, 2560)
             config.width >= 1080 -> Triple(VideoCodecResolutionType.VIDEO_1080x1920, 1080, 1920)
             else -> Triple(VideoCodecResolutionType.VIDEO_720x1280, 720, 1280)
         }
+        config.width >= 1920 && config.height == 720 -> Triple(VideoCodecResolutionType.VIDEO_1920x1080, 1920, 1080)
         config.height >= 1440 -> Triple(VideoCodecResolutionType.VIDEO_2560x1440, 2560, 1440)
         config.height >= 1080 -> Triple(VideoCodecResolutionType.VIDEO_1920x1080, 1920, 1080)
         config.height >= 720 -> Triple(VideoCodecResolutionType.VIDEO_1280x720, 1280, 720)
         else -> Triple(VideoCodecResolutionType.VIDEO_800x480, 800, 480)
     }
+
+    private fun portrait() = config.height > config.width
 
     private fun discovery(): ServiceDiscoveryResponse {
         val res = codecSize.first
@@ -502,7 +510,7 @@ class HeadUnit(
                 .setAvailableType(MediaCodecType.MEDIA_CODEC_VIDEO_H264_BP)
                 .addVideoConfigs(VideoConfiguration.newBuilder().setCodecResolution(res)
                     .setFrameRate(if (config.fps60) VideoFrameRateType.VIDEO_FPS_60 else VideoFrameRateType.VIDEO_FPS_30)
-                    .setDensity(config.dpi).setWidthMargin(0).setHeightMargin(0))))
+                    .setDensity(config.dpi).setWidthMargin(videoMargins.first).setHeightMargin(videoMargins.second))))
             .apply {
                 if (config.cluster) addChannels(Service.newBuilder().setId(chCluster).setMediaSinkService(MediaSinkService.newBuilder()
                     .setAvailableType(MediaCodecType.MEDIA_CODEC_VIDEO_H264_BP)
